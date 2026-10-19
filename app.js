@@ -475,38 +475,14 @@ const THERMAL_LUT = new Uint8ClampedArray(256 * 3);
   }
 })();
 
-function applyCyberpunkFilter(imageData) {
+function applyOriginalPhotoboothFilter(imageData) {
   const d = imageData.data;
   for (let i = 0; i < d.length; i += 4) {
-    let r = d[i], g = d[i + 1], b = d[i + 2];
-    const lum = (77 * r + 150 * g + 29 * b) >> 8;
-    const norm = lum / 255;
-
-    // Gentle S-curve contrast (refined & cinematic, preserves skin tones)
-    const contrast = (v) => Math.max(0, Math.min(255, (v - 128) * 1.12 + 128));
-    r = contrast(r);
-    g = contrast(g);
-    b = contrast(b);
-
-    // Subtle neo-noir split-toning:
-    // Shadows: sleek cyan-teal undertone (atmospheric, not muddy)
-    if (norm < 0.40) {
-      const t = (0.40 - norm) / 0.40;
-      r = Math.max(0, r - t * 12);
-      g = Math.min(255, g + t * 14);
-      b = Math.min(255, b + t * 28);
-    } 
-    // Highlights: soft neon magenta/pink glow
-    else if (norm > 0.60) {
-      const t = (norm - 0.60) / 0.40;
-      r = Math.min(255, r + t * 24);
-      g = Math.max(0, g - t * 4);
-      b = Math.min(255, b + t * 18);
-    }
-
-    d[i]     = Math.max(0, Math.min(255, r));
-    d[i + 1] = Math.max(0, Math.min(255, g));
-    d[i + 2] = Math.max(0, Math.min(255, b));
+    const gray = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
+    let v = gray * PHOTOBOOTH_CONTRAST_ALPHA + PHOTOBOOTH_BRIGHTNESS_BETA;
+    v += gaussianNoise(PHOTOBOOTH_NOISE_STD);
+    v = Math.max(0, Math.min(255, v));
+    d[i] = d[i + 1] = d[i + 2] = v;
   }
   return imageData;
 }
@@ -671,14 +647,14 @@ function applyRawFilter(imageData) {
 
 const FILTERS = [
   {
-    id: "cyberpunk",
+    id: "original",
     key: "1",
-    name: "CYBERPUNK",
-    subtitle: "Neon Tokyo",
-    icon: "⚡",
-    color: "#c084fc",
-    glow: "rgba(192, 132, 252, 0.6)",
-    apply: applyCyberpunkFilter,
+    name: "PHOTOBOOTH",
+    subtitle: "Original B&W",
+    icon: "📷",
+    color: "#e8e4ff",
+    glow: "rgba(232, 228, 255, 0.6)",
+    apply: applyOriginalPhotoboothFilter,
   },
   {
     id: "noir",

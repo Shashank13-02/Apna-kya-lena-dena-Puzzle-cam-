@@ -26,8 +26,8 @@ Once solved, completed snaps are collected into a downloadable vertical **Photo 
 ### 1. Clone the Repository
 
 ```bash
-git clone https://github.com/mishu006/Puzzle.git
-cd Puzzle
+git clone https://github.com/Shashank13-02/Apna-kya-lena-dena-Puzzle-cam-.git
+cd Apna-kya-lena-dena-Puzzle-cam-
 ```
 
 ### 2. Start a Local Server

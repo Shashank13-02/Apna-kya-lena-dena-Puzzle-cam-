@@ -16,6 +16,7 @@
   --mono:    'Space Mono', 'IBM Plex Mono', monospace;
   --sans:    'Space Grotesk', 'Inter', sans-serif;
   --display: 'Orbitron', sans-serif;
+  --brand:   'Yatra One', cursive, sans-serif;
 
   --gallery-width:      240px;
   --gallery-bg:         rgba(8, 8, 20, 0.97);
@@ -121,29 +122,40 @@ canvas#sceneCanvas {
 
 /* ─── BRAND ──────────────────────────────────────── */
 .brand {
-  font-family: var(--display);
-  font-size: 14px;
-  font-weight: 900;
-  letter-spacing: 0.22em;
+  font-family: var(--brand);
+  font-size: 26px;
+  font-weight: 400;
+  letter-spacing: 0.05em;
   text-transform: uppercase;
-  color: var(--signal);
+  background: linear-gradient(135deg, #ff9933 0%, #ff2a85 50%, #ffcc00 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
   display: flex;
   align-items: baseline;
-  gap: 10px;
-  text-shadow: 0 0 18px var(--glow-purple), 0 0 40px var(--glow-purple);
+  flex-wrap: wrap;
+  gap: 12px;
+  filter: drop-shadow(0 0 14px rgba(255, 153, 51, 0.65)) drop-shadow(0 0 28px rgba(255, 42, 133, 0.45));
   animation: brandPulse 3s ease-in-out infinite;
 }
 @keyframes brandPulse {
-  0%, 100% { text-shadow: 0 0 14px var(--glow-purple), 0 0 30px var(--glow-purple); }
-  50%       { text-shadow: 0 0 22px var(--glow-purple), 0 0 55px var(--glow-purple), 0 0 80px rgba(192,132,252,0.2); }
+  0%, 100% {
+    filter: drop-shadow(0 0 12px rgba(255, 153, 51, 0.55)) drop-shadow(0 0 24px rgba(255, 42, 133, 0.4));
+  }
+  50% {
+    filter: drop-shadow(0 0 20px rgba(255, 153, 51, 0.85)) drop-shadow(0 0 38px rgba(255, 42, 133, 0.7)) drop-shadow(0 0 55px rgba(255, 204, 0, 0.4));
+  }
 }
 .brand small {
-  font-family: var(--mono);
-  font-size: 9px;
-  color: var(--signal-2);
-  opacity: 0.75;
-  letter-spacing: 0.14em;
-  text-shadow: 0 0 10px var(--glow-cyan);
+  font-family: var(--sans);
+  font-size: 11px;
+  font-weight: 500;
+  color: #fed7aa;
+  -webkit-text-fill-color: #fed7aa;
+  background: none;
+  opacity: 0.9;
+  letter-spacing: 0.05em;
+  text-transform: none;
+  text-shadow: 0 0 8px rgba(255, 153, 51, 0.5);
 }
 
 /* ─── STATUS PILL ────────────────────────────────── */

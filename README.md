@@ -1,125 +1,120 @@
-# PuzzleCam — Gesture Capture
+# GarbaFOMO — Poora Desh Garba Me, Main Idhar Webcam Pe 🪔
 
-App de fotomatón controlada por gestos manuales que corre completamente en el navegador. Sin instalación, sin backend, sin dependencias que instalar.
-
----
-
-## **DESCRIPCIÓN**
-
-PuzzleCam captura una foto usando las manos como "marco", la convierte en un rompecabezas 3x3 con efecto fotográfico en blanco y negro, y permite armarlo usando gestos de pinch. Al completarlo, se guarda en una tira de fotos descargable.
+> An AI-powered, gesture-controlled webcam photobooth and puzzle game that runs 100% in the browser. Zero installations, zero backend, zero build steps. While the rest of India is playing Garba till 3 AM, you're pinching 3x3 puzzle pieces in mid-air!
 
 ---
 
-## **REQUISITOS DEL SISTEMA**
+## **DESCRIPTION**
 
-- **Navegador:** Chrome o Edge (recomendado), Firefox
-- **Hardware:** Cámara web
-- **Conexión a internet:** Requerida para cargar el modelo de MediaPipe (~10MB, solo la primera vez)
-- **Servidor local:** Requerido para ejecutar la app (no se puede abrir como archivo directamente)
+**GarbaFOMO** lets you frame photos using your hands as a camera box (index fingers & thumbs), applies real-time aesthetic film filters (from authentic Photobooth B&W and 1970s Kodachrome to Retro Vaporwave & Thermal Heatmap), slices your shot into a 3×3 jigsaw puzzle, and lets you drag and solve the pieces using mid-air pinch gestures.
+
+Once solved, completed snaps are collected into a downloadable vertical **Photo Booth** strip!
 
 ---
 
-## **INSTALACIÓN Y CONFIGURACIÓN**
+## **SYSTEM REQUIREMENTS**
 
-### 1. Clonar el repositorio
+- **Browser:** Google Chrome or Microsoft Edge (recommended), Firefox
+- **Hardware:** Webcam
+- **Internet Connection:** Required on first load to fetch the MediaPipe Vision model (~10MB CDN cached)
+- **Local / Web Server:** Required for WebCam security (`getUserMedia` requires `http://localhost` or `https://`)
+
+---
+
+## **GETTING STARTED**
+
+### 1. Clone the Repository
 
 ```bash
 git clone https://github.com/mishu006/Puzzle.git
 cd Puzzle
 ```
 
-### 2. Levantar un servidor local
+### 2. Start a Local Server
 
-La app usa módulos ES y acceso a cámara, por lo que necesita correr sobre HTTP.
+Because modern browsers restrict webcam access and ES modules over the `file://` protocol, run a quick local server:
 
-Instala la extensión [Live Server](https://marketplace.visualstudio.com/items?itemName=ritwickdey.LiveServer) en VS Code y haz clic en **Go Live**.
+**Using Python (built into macOS / Linux):**
+```bash
+python3 -m http.server 5500
+```
 
-### 3. Abrir en el navegador
+**Or using VS Code:**
+Install the [Live Server](https://marketplace.visualstudio.com/items?itemName=ritwickdey.LiveServer) extension and click **Go Live**.
+
+### 3. Open in Browser
 
 ```
 http://localhost:5500
 ```
 
-Permite el acceso a la cámara cuando el navegador lo solicite.
+Grant camera permissions when prompted.
 
 ---
 
-## **ESTRUCTURA DEL PROYECTO**
+## **PROJECT STRUCTURE**
 
 ```
 Puzzle/
-├── index.html        # Punto de entrada de la app
-├── app.js            # Lógica completa (tracking, puzzle, galería)
+├── index.html        # App entrypoint, HUD overlays, Windows XP filter bar
+├── app.js            # Complete engine (MediaPipe tracking, puzzle logic, 10 aesthetic filters, audio synthesis)
 ├── css/
-│   └── styles.css    # Estilos y layout
-└── .gitignore
+│   └── styles.css    # Yatra One typography, Windows XP Luna push-buttons, animations, scanlines
+└── README.md
 ```
 
 ---
 
-## **GESTOS DE CONTROL**
+## **HAND GESTURE CONTROLS**
 
-| Gesto | Acción |
+| Gesture | Action |
 |---|---|
-| Ambas manos haciendo pinch | Congelar el área y comenzar cuenta regresiva |
-| Una mano haciendo pinch sobre una pieza | Arrastrar la pieza del puzzle |
-| Puño cerrado (mantener) | Guardar puzzle completado / Reiniciar tablero |
+| **Two-Hand Pinch Box** | Freeze the frame area and begin the 3-second capture countdown |
+| **Single-Hand Pinch & Drag** | Grab and drag any puzzle piece across the board |
+| **Closed Fist (Hold)** | Save completed puzzle to Photo Booth / Reset board |
 
 ---
 
-## **LÓGICA DE LA APLICACIÓN**
+## **KEYBOARD HOTKEYS & FILTERS**
 
-1. Muestra ambas manos a la cámara y haz pinch para definir el recuadro de captura
-2. Mantén el pinch durante la cuenta regresiva — la foto se toma automáticamente
-3. La foto se divide en un puzzle 3x3 con filtro de fotomatón en blanco y negro
-4. Reorganiza las piezas con gestos de pinch
-5. Al completarlo, cierra el puño para guardar en la tira con animación de fragmentación
-6. Descarga la tira completa cuando tengas 3 puzzles guardados
+Switch aesthetic photo filters anytime during framing, live solving, or viewing:
 
----
-
-## **STACK TECNOLÓGICO**
-
-- **[MediaPipe Tasks Vision](https://developers.google.com/mediapipe)** `v0.10.14` — detección de landmarks de la mano
-- **Canvas 2D API** — renderizado, piezas del puzzle, efecto fotomatón
-- **JavaScript (ES Modules)** — sin frameworks
-- **CSS Custom Properties** — theming y layout
-
-Todas las dependencias externas se cargan por CDN. No se requiere ninguna instalación adicional.
+- <kbd>1</kbd> — 📷 **PHOTOBOOTH** (Original high-contrast grainy B&W)
+- <kbd>2</kbd> — 🎬 **NOIR B&W** (Classic cinematic monochrome)
+- <kbd>3</kbd> — 🌆 **VAPORWAVE** (Pink & cyan retro aesthetic)
+- <kbd>4</kbd> — 📺 **VHS GLITCH** (RGB aberration & scanline noise)
+- <kbd>5</kbd> — 🌅 **GOLDEN HOUR** (Warm sunset amber glow)
+- <kbd>6</kbd> — 🟩 **MATRIX** (Cyberpunk terminal green)
+- <kbd>7</kbd> — 🌡️ **THERMAL** (Ironbow infrared heatmap)
+- <kbd>8</kbd> — 🎞️ **1970s FILM** (Sun-drenched Kodachrome with turquoise blues)
+- <kbd>9</kbd> — 🌸 **ANIME POP** (High-saturation cel vibrancy)
+- <kbd>0</kbd> — 🌿 **NATURAL RAW** (Clean uncompressed feed)
+- <kbd>F</kbd> / <kbd>→</kbd> / <kbd>←</kbd> — Cycle filters forward / backward
+- <kbd>C</kbd> — Toggle filter target: **FRAME ONLY** vs **FULL WEBCAM**
 
 ---
 
-## **GUIA DE SOLUCION DE PROBLEMAS**
+## **TECH STACK & ARCHITECTURE**
 
-### **La cámara no enciende**
-
-Verifica que ninguna otra aplicación (Teams, Zoom, Discord, etc.) esté usando la cámara en segundo plano.
-
-### **La app no carga el modelo**
-
-Verifica tu conexión a internet. El modelo de MediaPipe (~10MB) se descarga desde `storage.googleapis.com` y el runtime desde `cdn.jsdelivr.net`. Si alguno de esos dominios está bloqueado en tu red, la app no podrá iniciar.
-
-### **La app muestra pantalla negra**
-
-Asegúrate de estar abriendo la app desde un servidor local (HTTP), no directamente como archivo desde el explorador de archivos.
-
-### **El gesto de pinch no se detecta**
-
-Asegúrate de tener buena iluminación y que ambas manos sean visibles para la cámara. Acerca más el índice y el pulgar hasta que el punto amarillo en pantalla se active.
+- **[Google MediaPipe Tasks Vision](https://developers.google.com/mediapipe)** `v0.10.14` — 21 real-time 3D hand landmarks running via WebGL GPU delegate (with CPU fallback).
+- **HTML5 Canvas 2D API** — Hardware-accelerated sub-millisecond per-pixel color grading, LUT mapping, and puzzle tile slicing.
+- **Web Audio API** — Synthesized procedural sci-fi audio chimes on filter changes without external MP3 dependencies.
+- **Windows XP Luna Design System** — Pixel-accurate 2001 Windows XP bevels, amber hover glows, and active sunken states.
+- **Vanilla ES Modules** — Zero build tools, bundlers, or npm bloat.
 
 ---
 
-## **COMPATIBILIDAD DE NAVEGADORES**
+## **BROWSER COMPATIBILITY**
 
-| Navegador | Soporte |
+| Browser | Compatibility |
 |---|---|
-| Chrome / Edge | Recomendado |
+| Chrome / Edge | Recommended (full GPU acceleration) |
 | Firefox | Compatible |
-| Safari | Limitado (puede requerir permisos adicionales) |
-| Movil | Limitado (recomendado en escritorio) |
+| Safari | Partial (Webcam permissions required) |
+| Mobile | Supported (Desktop webcam recommended for hand gesture framing) |
 
 ---
 
-## **LICENCIA**
+## **LICENSE**
 
-MIT — libre para usar, modificar y compartir.
+MIT — Free to use, adapt, and share.

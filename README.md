@@ -1,4 +1,4 @@
-# GarbaFOMO — Poora Desh Garba Me, Main Idhar Webcam Pe 🪔
+# Apna Kya Lena Dena — Poora Desh Garba Me, Main Idhar Webcam Pe 🪔
 
 > An AI-powered, gesture-controlled webcam photobooth and puzzle game that runs 100% in the browser. Zero installations, zero backend, zero build steps. While the rest of India is playing Garba till 3 AM, you're pinching 3x3 puzzle pieces in mid-air!
 
@@ -6,7 +6,7 @@
 
 ## **DESCRIPTION**
 
-**GarbaFOMO** lets you frame photos using your hands as a camera box (index fingers & thumbs), applies real-time aesthetic film filters (from authentic Photobooth B&W and 1970s Kodachrome to Retro Vaporwave & Thermal Heatmap), slices your shot into a 3×3 jigsaw puzzle, and lets you drag and solve the pieces using mid-air pinch gestures.
+**Apna Kya Lena Dena** lets you frame photos using your hands as a camera box (index fingers & thumbs), applies real-time aesthetic film filters (from authentic Photobooth B&W and 1970s Kodachrome to Retro Vaporwave & Thermal Heatmap), slices your shot into a 3×3 jigsaw puzzle, and lets you drag and solve the pieces using mid-air pinch gestures.
 
 Once solved, completed snaps are collected into a downloadable vertical **Photo Booth** strip!
 

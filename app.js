@@ -161,7 +161,7 @@ function downloadPhotoStrip() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `garbafomo_photobooth_${Date.now()}.png`;
+    link.download = `apna_kya_lena_dena_photobooth_${Date.now()}.png`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -307,7 +307,7 @@ async function initHandLandmarker() {
     );
     return handLandmarker;
   } catch (gpuErr) {
-    console.warn("[GarbaFOMO] GPU delegate failed, retrying with CPU…", gpuErr);
+    console.warn("[ApnaKyaLenaDena] GPU delegate failed, retrying with CPU…", gpuErr);
   }
 
   try {

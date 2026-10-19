@@ -413,24 +413,87 @@ function drawCountdownOverlay(box) {
 
   const filter = FILTERS[currentFilterIndex];
   ctx.save();
+
+  // Darkened frosted glass backing
+  ctx.fillStyle = "rgba(8, 6, 18, 0.6)";
+  ctx.fillRect(box.x, box.y, box.width, box.height);
+
+  // Outer glowing framing border
   ctx.strokeStyle = filter.color;
   ctx.lineWidth = 3;
+  ctx.shadowColor = filter.glow;
+  ctx.shadowBlur = 20;
   ctx.strokeRect(box.x, box.y, box.width, box.height);
 
   const n = Math.ceil(remaining);
   const cx = box.x + box.width / 2;
   const cy = box.y + box.height / 2;
+  const maxR = Math.min(box.width, box.height) * 0.36;
 
-  ctx.fillStyle = "rgba(10, 10, 24, 0.55)";
-  ctx.fillRect(box.x, box.y, box.width, box.height);
+  // Expanding shockwave ripple on every beat
+  const subSec = remaining % 1; // 1 -> 0
+  const rippleProgress = 1 - subSec; // 0 -> 1
+  const rippleRadius = maxR * (0.8 + rippleProgress * 0.65);
+  ctx.beginPath();
+  ctx.arc(cx, cy, rippleRadius, 0, Math.PI * 2);
+  ctx.strokeStyle = filter.color;
+  ctx.lineWidth = Math.max(1, (1 - rippleProgress) * 4);
+  ctx.globalAlpha = (1 - rippleProgress) * 0.65;
+  ctx.stroke();
+  ctx.globalAlpha = 1.0;
 
-  ctx.font = `bold ${Math.max(48, Math.min(box.width, box.height) * 0.42)}px 'Orbitron', monospace`;
+  // Faint track ring
+  ctx.beginPath();
+  ctx.arc(cx, cy, maxR, 0, Math.PI * 2);
+  ctx.strokeStyle = "rgba(255, 255, 255, 0.15)";
+  ctx.lineWidth = 3;
+  ctx.stroke();
+
+  // Circular Countdown Progress Arc
+  const progressRatio = Math.max(0, remaining / COUNTDOWN_SECONDS);
+  ctx.beginPath();
+  ctx.arc(cx, cy, maxR, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * progressRatio, false);
+  ctx.strokeStyle = filter.color;
+  ctx.lineWidth = 6;
+  ctx.lineCap = "round";
+  ctx.shadowBlur = 24;
+  ctx.stroke();
+
+  // Viewfinder corner brackets
+  const cornerLen = 24;
+  ctx.lineWidth = 4;
+  const corners = [
+    [box.x, box.y, 1, 1],
+    [box.x + box.width, box.y, -1, 1],
+    [box.x, box.y + box.height, 1, -1],
+    [box.x + box.width, box.y + box.height, -1, -1],
+  ];
+  for (const [cornX, cornY, dx, dy] of corners) {
+    ctx.beginPath();
+    ctx.moveTo(cornX, cornY + cornerLen * dy);
+    ctx.lineTo(cornX, cornY);
+    ctx.lineTo(cornX + cornerLen * dx, cornY);
+    ctx.stroke();
+  }
+
+  // Smooth pop-in scale for the countdown digit
+  const numScale = 1.0 + Math.pow(subSec, 3) * 0.25;
+  const baseFontSize = Math.max(52, Math.min(box.width, box.height) * 0.38);
+  ctx.font = `bold ${Math.round(baseFontSize * numScale)}px 'Orbitron', monospace`;
   ctx.fillStyle = filter.color;
   ctx.shadowColor = filter.glow;
-  ctx.shadowBlur = 28;
+  ctx.shadowBlur = 32;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   ctx.fillText(String(n), cx, cy);
+
+  // Aesthetic bottom status
+  ctx.font = "bold 11px 'Space Mono', monospace";
+  ctx.fillStyle = "#ffffff";
+  ctx.shadowColor = filter.glow;
+  ctx.shadowBlur = 12;
+  ctx.fillText("✨ HOLD STEADY • SMILE! 📸 ✨", cx, box.y + box.height - 18);
+
   ctx.restore();
 
   statusText.textContent = `capturing in ${n}… [${filter.name}]`;
@@ -1249,16 +1312,73 @@ function drawBoardAndPieces() {
   ctx.restore();
 
   if (puzzle.solved) {
+    const now = performance.now();
     ctx.save();
-    ctx.fillStyle = "rgba(52,211,153,0.15)";
+
+    // Emerald celebratory glass overlay
+    ctx.fillStyle = "rgba(10, 35, 24, 0.45)";
     ctx.fillRect(box.x, box.y, box.width, box.height);
-    ctx.font = `${Math.max(20, box.width * 0.07)}px 'Orbitron', monospace`;
+
+    // Glowing border with pulsating emerald & gold
+    const borderPulse = 0.5 + 0.5 * Math.sin(now * 0.005);
+    ctx.strokeStyle = `rgba(52, 211, 153, ${0.7 + 0.3 * borderPulse})`;
+    ctx.lineWidth = 4 + borderPulse * 3;
+    ctx.shadowColor = "rgba(52, 211, 153, 0.9)";
+    ctx.shadowBlur = 24 + borderPulse * 16;
+    ctx.strokeRect(box.x, box.y, box.width, box.height);
+
+    // Dynamic celebration floating sparkles
+    for (let s = 0; s < 12; s++) {
+      const spPhase = (now * 0.002 + s * 1.618) % 1;
+      const spAngle = (s * 2 * Math.PI) / 12 + now * 0.001;
+      const spDist = (box.width * 0.35) * (0.3 + 0.7 * spPhase);
+      const spX = box.x + box.width / 2 + Math.cos(spAngle) * spDist;
+      const spY = box.y + box.height / 2 + Math.sin(spAngle) * spDist;
+      const spAlpha = Math.sin(spPhase * Math.PI);
+      const spSize = 3 + 3 * spAlpha;
+
+      ctx.beginPath();
+      ctx.arc(spX, spY, spSize, 0, Math.PI * 2);
+      ctx.fillStyle = s % 2 === 0 ? `rgba(255, 215, 0, ${spAlpha})` : `rgba(52, 211, 153, ${spAlpha})`;
+      ctx.shadowColor = s % 2 === 0 ? "rgba(255, 215, 0, 0.9)" : "rgba(52, 211, 153, 0.9)";
+      ctx.shadowBlur = 12;
+      ctx.fill();
+    }
+
+    // Celebratory Badge Ribbon in Center
+    const bannerW = Math.min(box.width * 0.92, 340);
+    const bannerH = 72;
+    const bannerX = box.x + (box.width - bannerW) / 2;
+    const bannerY = box.y + (box.height - bannerH) / 2;
+
+    ctx.fillStyle = "rgba(5, 18, 12, 0.92)";
+    ctx.strokeStyle = "#34d399";
+    ctx.lineWidth = 2;
+    ctx.shadowColor = "rgba(52, 211, 153, 0.8)";
+    ctx.shadowBlur = 20;
+
+    // Draw rounded rect banner
+    ctx.beginPath();
+    ctx.roundRect(bannerX, bannerY, bannerW, bannerH, 14);
+    ctx.fill();
+    ctx.stroke();
+
+    // Text: Title
+    ctx.font = `bold ${Math.max(16, bannerW * 0.062)}px 'Orbitron', monospace`;
     ctx.fillStyle = "#34d399";
-    ctx.shadowColor = "rgba(52,211,153,0.8)";
+    ctx.shadowColor = "rgba(52, 211, 153, 0.9)";
     ctx.shadowBlur = 16;
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillText("COMPLETE! — fist to save", box.x + box.width / 2, box.y + box.height / 2);
+    ctx.fillText("✨ PUZZLE COMPLETE! ✨", bannerX + bannerW / 2, bannerY + 24);
+
+    // Text: Subtitle
+    ctx.font = "bold 11px 'Space Mono', monospace";
+    ctx.fillStyle = "#fed7aa";
+    ctx.shadowColor = "rgba(255, 153, 51, 0.6)";
+    ctx.shadowBlur = 10;
+    ctx.fillText("HOLD CLOSED FIST ✊ TO SAVE", bannerX + bannerW / 2, bannerY + 48);
+
     ctx.restore();
   }
 }
@@ -1302,12 +1422,47 @@ function applyActiveFilterToBox(box) {
 
 function drawLiveFrameOverlay(box) {
   const filter = FILTERS[currentFilterIndex];
+  const now = performance.now();
   ctx.save();
+
+  // Subtle animated rule-of-thirds composition grid
+  ctx.strokeStyle = "rgba(255, 255, 255, 0.12)";
+  ctx.lineWidth = 1;
+  ctx.setLineDash([4, 6]);
+  for (let i = 1; i <= 2; i++) {
+    const gx = box.x + (box.width / 3) * i;
+    const gy = box.y + (box.height / 3) * i;
+    ctx.beginPath();
+    ctx.moveTo(gx, box.y);
+    ctx.lineTo(gx, box.y + box.height);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(box.x, gy);
+    ctx.lineTo(box.x + box.width, gy);
+    ctx.stroke();
+  }
+  ctx.setLineDash([]);
+
+  // Holographic scanline beam sweeping vertically inside box
+  const scanT = (now % 2200) / 2200;
+  const scanY = box.y + box.height * scanT;
+  const scanGrad = ctx.createLinearGradient(box.x, scanY - 14, box.x, scanY + 14);
+  scanGrad.addColorStop(0, "rgba(255,255,255,0)");
+  scanGrad.addColorStop(0.5, filter.glow || "rgba(192,132,252,0.35)");
+  scanGrad.addColorStop(1, "rgba(255,255,255,0)");
+  ctx.fillStyle = scanGrad;
+  ctx.fillRect(box.x, scanY - 14, box.width, 28);
+
+  // Outer framing boundary
   ctx.strokeStyle = filter.color;
-  ctx.lineWidth = 3;
+  ctx.lineWidth = 2.5;
+  ctx.shadowColor = filter.glow;
+  ctx.shadowBlur = 14;
   ctx.strokeRect(box.x, box.y, box.width, box.height);
 
-  const cornerLen = 20;
+  // Breathing corner brackets
+  const breathe = Math.sin(now * 0.006);
+  const cornerLen = 22 + breathe * 4;
   ctx.lineWidth = 4;
   const corners = [
     [box.x, box.y, 1, 1],
@@ -1323,16 +1478,45 @@ function drawLiveFrameOverlay(box) {
     ctx.stroke();
   }
 
-  // Floating filter label above frame
+  // Center targeting reticle
+  const midX = box.x + box.width / 2;
+  const midY = box.y + box.height / 2;
+  ctx.strokeStyle = "rgba(255, 255, 255, 0.4)";
+  ctx.lineWidth = 1.5;
+  const reticleSize = 10;
+  ctx.beginPath();
+  ctx.moveTo(midX - reticleSize, midY);
+  ctx.lineTo(midX + reticleSize, midY);
+  ctx.moveTo(midX, midY - reticleSize);
+  ctx.lineTo(midX, midY + reticleSize);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.arc(midX, midY, 4, 0, Math.PI * 2);
+  ctx.stroke();
+
+  // Floating filter label and record status above frame
   ctx.font = "bold 11px 'Space Mono', monospace";
   ctx.fillStyle = filter.color;
   ctx.shadowColor = filter.glow;
   ctx.shadowBlur = 12;
   ctx.fillText(
-    `${filter.icon} ${filter.name} [KEY ${filter.key}]`,
+    `● REC FRAME • ${filter.icon} ${filter.name} [KEY ${filter.key}]`,
     box.x + 8,
     Math.max(22, box.y - 10)
   );
+
+  // Bottom prompt inside frame
+  ctx.font = "bold 10px 'Space Mono', monospace";
+  ctx.fillStyle = "rgba(255, 255, 255, 0.85)";
+  ctx.shadowColor = "rgba(0, 0, 0, 0.8)";
+  ctx.shadowBlur = 6;
+  ctx.textAlign = "center";
+  ctx.fillText(
+    "PINCH BOTH HANDS TO LOCK 📸",
+    box.x + box.width / 2,
+    box.y + box.height - 12
+  );
+
   ctx.restore();
 }
 

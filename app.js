@@ -58,6 +58,15 @@ const downloadStripBtn = document.getElementById("downloadStripBtn");
 const resetAllBtn = document.getElementById("resetAllBtn");
 const stripCompleteMsg = document.getElementById("stripCompleteMsg");
 
+const filterToast = document.getElementById("filterToast");
+const filterToastIcon = document.getElementById("filterToastIcon");
+const filterToastName = document.getElementById("filterToastName");
+const filterToastSub = document.getElementById("filterToastSub");
+const filterToastBadge = document.getElementById("filterToastBadge");
+const filterChipsContainer = document.getElementById("filterChips");
+const camModeToggle = document.getElementById("camModeToggle");
+const camModeLabel = document.getElementById("camModeLabel");
+
 let appState = "tracking";
 
 const puzzle = {
@@ -66,6 +75,7 @@ const puzzle = {
   solved: false,
   tileW: 0,
   tileH: 0,
+  rawCropCanvas: null,
 };
 
 const SHATTER_COLS = 6;
@@ -151,7 +161,7 @@ function downloadPhotoStrip() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `puzzlecam_tira_${Date.now()}.png`;
+    link.download = `puzzlecam_photobooth_${Date.now()}.png`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -170,7 +180,7 @@ function resetEverything() {
   hideStripComplete();
   updateStripDownloadAvailability();
   resetPuzzleOnly();
-  statusText.textContent = "todo reiniciado";
+  statusText.textContent = "everything reset";
 }
 
 function renderGalleryThumb(snapshotCanvas, index) {
@@ -198,6 +208,7 @@ function resetPuzzleOnly() {
   puzzle.pieces = [];
   puzzle.solved = false;
   puzzle.fullPhotoboothCanvas = null;
+  puzzle.rawCropCanvas = null;
   appState = "tracking";
   countdown.active = false;
   drag.activeHand = null;
@@ -235,7 +246,7 @@ window.addEventListener("resize", fitCanvasToWindow);
 
 async function initWebcam() {
   if (!navigator.mediaDevices?.getUserMedia) {
-    throw new Error("Este navegador no soporta getUserMedia.");
+    throw new Error("This browser does not support getUserMedia.");
   }
   const stream = await navigator.mediaDevices.getUserMedia({
     video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: "user" },
@@ -271,7 +282,7 @@ async function initHandLandmarker() {
         "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm"
       ),
       LOAD_TIMEOUT_MS,
-      "Tiempo de espera agotado cargando el runtime de MediaPipe (WASM). Revisa tu conexión a internet o si cdn.jsdelivr.net está bloqueado."
+      "Timed out loading the MediaPipe runtime (WASM). Check your internet connection or if cdn.jsdelivr.net is blocked."
     );
   } catch (err) {
     throw err;
@@ -292,11 +303,11 @@ async function initHandLandmarker() {
         minTrackingConfidence: 0.6,
       }),
       LOAD_TIMEOUT_MS,
-      "Tiempo de espera agotado descargando el modelo HandLandmarker (~10MB) con GPU."
+      "Timed out downloading the HandLandmarker model (~10MB) with GPU."
     );
     return handLandmarker;
   } catch (gpuErr) {
-    console.warn("[PuzzleCam] Falló con delegate GPU, reintentando con CPU…", gpuErr);
+    console.warn("[PuzzleCam] GPU delegate failed, retrying with CPU…", gpuErr);
   }
 
   try {
@@ -314,7 +325,7 @@ async function initHandLandmarker() {
         minTrackingConfidence: 0.6,
       }),
       LOAD_TIMEOUT_MS,
-      "Tiempo de espera agotado descargando el modelo HandLandmarker (~10MB) incluso con CPU. Revisa tu conexión o si storage.googleapis.com está bloqueado en tu red."
+      "Timed out downloading the HandLandmarker model (~10MB) even with CPU. Check your connection or if storage.googleapis.com is blocked on your network."
     );
     return handLandmarker;
   } catch (cpuErr) {
@@ -398,10 +409,11 @@ function drawCountdownOverlay(box) {
     return;
   }
 
-  applyBWInsideBox(box);
+  applyActiveFilterToBox(box);
 
+  const filter = FILTERS[currentFilterIndex];
   ctx.save();
-  ctx.strokeStyle = "#f5c518";
+  ctx.strokeStyle = filter.color;
   ctx.lineWidth = 3;
   ctx.strokeRect(box.x, box.y, box.width, box.height);
 
@@ -409,17 +421,19 @@ function drawCountdownOverlay(box) {
   const cx = box.x + box.width / 2;
   const cy = box.y + box.height / 2;
 
-  ctx.fillStyle = "rgba(10,10,8,0.45)";
+  ctx.fillStyle = "rgba(10, 10, 24, 0.55)";
   ctx.fillRect(box.x, box.y, box.width, box.height);
 
-  ctx.font = `${Math.max(48, Math.min(box.width, box.height) * 0.4)}px 'IBM Plex Mono', monospace`;
-  ctx.fillStyle = "#f5c518";
+  ctx.font = `bold ${Math.max(48, Math.min(box.width, box.height) * 0.42)}px 'Orbitron', monospace`;
+  ctx.fillStyle = filter.color;
+  ctx.shadowColor = filter.glow;
+  ctx.shadowBlur = 28;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   ctx.fillText(String(n), cx, cy);
   ctx.restore();
 
-  statusText.textContent = `capturando en ${n}…`;
+  statusText.textContent = `capturing in ${n}… [${filter.name}]`;
 }
 
 function gaussianNoise(std) {
@@ -429,16 +443,511 @@ function gaussianNoise(std) {
   return z0 * std;
 }
 
-function applyPhotoboothEffect(imageData) {
+// ─── AESTHETIC FILTER PALETTES & ALGORITHMS ───────────────
+
+const THERMAL_LUT = new Uint8ClampedArray(256 * 3);
+(function initThermalLUT() {
+  const stops = [
+    { p: 0.00, r: 8,   g: 0,   b: 36  },
+    { p: 0.18, r: 0,   g: 25,  b: 170 },
+    { p: 0.38, r: 0,   g: 195, b: 215 },
+    { p: 0.60, r: 35,  g: 215, b: 45  },
+    { p: 0.78, r: 235, g: 145, b: 0   },
+    { p: 0.92, r: 245, g: 30,  b: 20  },
+    { p: 1.00, r: 255, g: 255, b: 245 },
+  ];
+  for (let i = 0; i < 256; i++) {
+    const t = i / 255;
+    let s0 = stops[0], s1 = stops[stops.length - 1];
+    for (let s = 0; s < stops.length - 1; s++) {
+      if (t >= stops[s].p && t <= stops[s + 1].p) {
+        s0 = stops[s];
+        s1 = stops[s + 1];
+        break;
+      }
+    }
+    const span = s1.p - s0.p || 1;
+    const f = (t - s0.p) / span;
+    const off = i * 3;
+    THERMAL_LUT[off]     = Math.round(s0.r + (s1.r - s0.r) * f);
+    THERMAL_LUT[off + 1] = Math.round(s0.g + (s1.g - s0.g) * f);
+    THERMAL_LUT[off + 2] = Math.round(s0.b + (s1.b - s0.b) * f);
+  }
+})();
+
+function applyCyberpunkFilter(imageData) {
+  const d = imageData.data;
+  for (let i = 0; i < d.length; i += 4) {
+    let r = d[i], g = d[i + 1], b = d[i + 2];
+    const lum = (77 * r + 150 * g + 29 * b) >> 8;
+    const norm = lum / 255;
+
+    // Gentle S-curve contrast (refined & cinematic, preserves skin tones)
+    const contrast = (v) => Math.max(0, Math.min(255, (v - 128) * 1.12 + 128));
+    r = contrast(r);
+    g = contrast(g);
+    b = contrast(b);
+
+    // Subtle neo-noir split-toning:
+    // Shadows: sleek cyan-teal undertone (atmospheric, not muddy)
+    if (norm < 0.40) {
+      const t = (0.40 - norm) / 0.40;
+      r = Math.max(0, r - t * 12);
+      g = Math.min(255, g + t * 14);
+      b = Math.min(255, b + t * 28);
+    } 
+    // Highlights: soft neon magenta/pink glow
+    else if (norm > 0.60) {
+      const t = (norm - 0.60) / 0.40;
+      r = Math.min(255, r + t * 24);
+      g = Math.max(0, g - t * 4);
+      b = Math.min(255, b + t * 18);
+    }
+
+    d[i]     = Math.max(0, Math.min(255, r));
+    d[i + 1] = Math.max(0, Math.min(255, g));
+    d[i + 2] = Math.max(0, Math.min(255, b));
+  }
+  return imageData;
+}
+
+function applyNoirFilter(imageData) {
   const d = imageData.data;
   for (let i = 0; i < d.length; i += 4) {
     const gray = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
-    let v = gray * PHOTOBOOTH_CONTRAST_ALPHA + PHOTOBOOTH_BRIGHTNESS_BETA;
-    v += gaussianNoise(PHOTOBOOTH_NOISE_STD);
+    let v = (gray - 128) * 1.36 + 128 + 8 + gaussianNoise(12);
     v = Math.max(0, Math.min(255, v));
     d[i] = d[i + 1] = d[i + 2] = v;
   }
   return imageData;
+}
+
+function applyVaporwaveFilter(imageData) {
+  const d = imageData.data;
+  for (let i = 0; i < d.length; i += 4) {
+    const r = d[i], g = d[i + 1], b = d[i + 2];
+    d[i]     = Math.min(255, Math.max(30, r * 1.22 + 25));
+    d[i + 1] = Math.min(255, Math.max(16, g * 0.84 + 14));
+    d[i + 2] = Math.min(255, Math.max(52, b * 1.38 + 42));
+  }
+  return imageData;
+}
+
+function applyVHSFilter(imageData) {
+  const d = imageData.data;
+  const w = imageData.width;
+  const h = imageData.height;
+  const src = new Uint8ClampedArray(d);
+  const shift = 4;
+  for (let y = 0; y < h; y++) {
+    const scanline = (y % 3 === 0) ? 0.82 : 1.0;
+    const rowOffset = y * w;
+    for (let x = 0; x < w; x++) {
+      const idx = (rowOffset + x) * 4;
+      const rIdx = (rowOffset + Math.max(0, x - shift)) * 4;
+      const bIdx = (rowOffset + Math.min(w - 1, x + shift)) * 4;
+      d[idx]     = Math.min(255, src[rIdx] * 1.18 * scanline + 10);
+      d[idx + 1] = Math.min(255, src[idx + 1] * 1.02 * scanline);
+      d[idx + 2] = Math.min(255, src[bIdx + 2] * 1.25 * scanline + 16);
+    }
+  }
+  return imageData;
+}
+
+function applyGoldenFilter(imageData) {
+  const d = imageData.data;
+  for (let i = 0; i < d.length; i += 4) {
+    const r = d[i], g = d[i + 1], b = d[i + 2];
+    d[i]     = Math.min(255, r * 1.28 + 22);
+    d[i + 1] = Math.min(255, g * 1.10 + 10);
+    d[i + 2] = Math.max(0, Math.min(255, b * 0.80 - 6));
+  }
+  return imageData;
+}
+
+function applyMatrixFilter(imageData) {
+  const d = imageData.data;
+  for (let i = 0; i < d.length; i += 4) {
+    const lum = (77 * d[i] + 150 * d[i + 1] + 29 * d[i + 2]) >> 8;
+    d[i]     = Math.min(255, lum * 0.12);
+    d[i + 1] = Math.min(255, lum * 1.42 + 24);
+    d[i + 2] = Math.min(255, lum * 0.32);
+  }
+  return imageData;
+}
+
+function applyThermalFilter(imageData) {
+  const d = imageData.data;
+  for (let i = 0; i < d.length; i += 4) {
+    const lum = (77 * d[i] + 150 * d[i + 1] + 29 * d[i + 2]) >> 8;
+    const off = lum * 3;
+    d[i]     = THERMAL_LUT[off];
+    d[i + 1] = THERMAL_LUT[off + 1];
+    d[i + 2] = THERMAL_LUT[off + 2];
+  }
+  return imageData;
+}
+
+function applyVintageFilter(imageData) {
+  const d = imageData.data;
+  for (let i = 0; i < d.length; i += 4) {
+    let r = d[i], g = d[i + 1], b = d[i + 2];
+    const lum = (77 * r + 150 * g + 29 * b) >> 8;
+    const norm = lum / 255;
+
+    // 1. Base 1970s Kodachrome warm golden palette
+    let newR = r * 1.18 + 12;
+    let newG = g * 1.10 + 8;
+    let newB = b * 0.80 + 8;
+
+    // 2. Vintage 70s Turquoise/Teal shift for blue spectrum (vintage car, summer sky)
+    if (b > r + 8 && b > 55) {
+      const tealAmount = Math.min(1, (b - r) / 60);
+      newG += tealAmount * 28;
+      newB = b * 1.10 + 14;
+      newR = Math.max(0, newR - tealAmount * 18);
+    }
+
+    // 3. Poppy 70s vermilion reds (warm, punchy vintage red)
+    if (r > g + 20 && r > b + 20) {
+      newR = Math.min(255, newR * 1.15 + 10);
+      newG = Math.max(0, newG * 0.94);
+    }
+
+    // 4. Lifted faded film blacks (warm olive/amber toe instead of harsh 0 black)
+    if (norm < 0.35) {
+      const lift = ((0.35 - norm) / 0.35) * 24;
+      newR += lift * 0.90;
+      newG += lift * 1.00;
+      newB += lift * 0.70;
+    }
+
+    // 5. Creamy vanilla/butter highlight roll-off (sun-drenched whites)
+    if (norm > 0.58) {
+      const h = (norm - 0.58) / 0.42;
+      newR += h * 24;
+      newG += h * 18;
+      newB = Math.max(0, newB - h * 22);
+    }
+
+    // 6. Subtle 35mm film grain
+    const grain = (Math.random() - 0.5) * 8;
+    newR += grain;
+    newG += grain;
+    newB += grain;
+
+    d[i]     = Math.max(0, Math.min(255, newR));
+    d[i + 1] = Math.max(0, Math.min(255, newG));
+    d[i + 2] = Math.max(0, Math.min(255, newB));
+  }
+  return imageData;
+}
+
+function applyAnimeFilter(imageData) {
+  const d = imageData.data;
+  const steps = 4;
+  const stepSize = 256 / steps;
+  for (let i = 0; i < d.length; i += 4) {
+    const r = d[i], g = d[i + 1], b = d[i + 2];
+    const lum = (77 * r + 150 * g + 29 * b) >> 8;
+    const quant = Math.floor(lum / stepSize) * (255 / (steps - 1));
+    const factor = quant / Math.max(1, lum);
+    d[i]     = Math.min(255, Math.max(0, r * factor * 1.16));
+    d[i + 1] = Math.min(255, Math.max(0, g * factor * 1.10));
+    d[i + 2] = Math.min(255, Math.max(0, b * factor * 1.16));
+  }
+  return imageData;
+}
+
+function applyRawFilter(imageData) {
+  const d = imageData.data;
+  for (let i = 0; i < d.length; i += 4) {
+    d[i]     = Math.min(255, d[i] * 1.04);
+    d[i + 1] = Math.min(255, d[i + 1] * 1.04);
+    d[i + 2] = Math.min(255, d[i + 2] * 1.04);
+  }
+  return imageData;
+}
+
+const FILTERS = [
+  {
+    id: "cyberpunk",
+    key: "1",
+    name: "CYBERPUNK",
+    subtitle: "Neon Tokyo",
+    icon: "⚡",
+    color: "#c084fc",
+    glow: "rgba(192, 132, 252, 0.6)",
+    apply: applyCyberpunkFilter,
+  },
+  {
+    id: "noir",
+    key: "2",
+    name: "NOIR B&W",
+    subtitle: "Silver Gelatin",
+    icon: "🖤",
+    color: "#e2e8f0",
+    glow: "rgba(226, 232, 240, 0.5)",
+    apply: applyNoirFilter,
+  },
+  {
+    id: "vaporwave",
+    key: "3",
+    name: "VAPORWAVE",
+    subtitle: "80s Sunset",
+    icon: "🌸",
+    color: "#f472b6",
+    glow: "rgba(244, 114, 182, 0.6)",
+    apply: applyVaporwaveFilter,
+  },
+  {
+    id: "vhs",
+    key: "4",
+    name: "VHS GLITCH",
+    subtitle: "Analog Tape",
+    icon: "📼",
+    color: "#fb7185",
+    glow: "rgba(251, 113, 133, 0.6)",
+    apply: applyVHSFilter,
+  },
+  {
+    id: "golden",
+    key: "5",
+    name: "GOLDEN HOUR",
+    subtitle: "Amber Sunlight",
+    icon: "🌅",
+    color: "#fbbf24",
+    glow: "rgba(251, 191, 36, 0.6)",
+    apply: applyGoldenFilter,
+  },
+  {
+    id: "matrix",
+    key: "6",
+    name: "MATRIX",
+    subtitle: "Cyber Terminal",
+    icon: "💻",
+    color: "#22c55e",
+    glow: "rgba(34, 197, 94, 0.6)",
+    apply: applyMatrixFilter,
+  },
+  {
+    id: "thermal",
+    key: "7",
+    name: "THERMAL",
+    subtitle: "Heatmap Vision",
+    icon: "🔥",
+    color: "#ef4444",
+    glow: "rgba(239, 68, 68, 0.6)",
+    apply: applyThermalFilter,
+  },
+  {
+    id: "vintage",
+    key: "8",
+    name: "1970s FILM",
+    subtitle: "Kodachrome",
+    icon: "🎞️",
+    color: "#f59e0b",
+    glow: "rgba(245, 158, 11, 0.6)",
+    apply: applyVintageFilter,
+  },
+  {
+    id: "anime",
+    key: "9",
+    name: "ANIME POP",
+    subtitle: "Cel-Shaded",
+    icon: "🎨",
+    color: "#a855f7",
+    glow: "rgba(168, 85, 247, 0.6)",
+    apply: applyAnimeFilter,
+  },
+  {
+    id: "raw",
+    key: "0",
+    name: "NATURAL",
+    subtitle: "True Color",
+    icon: "✨",
+    color: "#38bdf8",
+    glow: "rgba(56, 189, 248, 0.6)",
+    apply: applyRawFilter,
+  },
+];
+
+let currentFilterIndex = 0;
+let fullCameraFilterEnabled = false;
+
+function applyActiveFilter(imageData) {
+  const active = FILTERS[currentFilterIndex];
+  if (active && typeof active.apply === "function") {
+    active.apply(imageData);
+  }
+  return imageData;
+}
+
+let audioCtx = null;
+function playFilterSwitchSound(freq = 460) {
+  try {
+    if (!audioCtx) {
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    if (audioCtx.state === "suspended") {
+      audioCtx.resume();
+    }
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.type = "sine";
+    osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(freq * 1.5, audioCtx.currentTime + 0.07);
+    gain.gain.setValueAtTime(0.06, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.08);
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    osc.start();
+    osc.stop(audioCtx.currentTime + 0.08);
+  } catch (e) {}
+}
+
+let toastTimer = null;
+function showFilterToast(filter) {
+  if (!filterToast) return;
+  if (filterToastIcon) filterToastIcon.textContent = filter.icon;
+  if (filterToastName) filterToastName.textContent = filter.name;
+  if (filterToastSub) filterToastSub.textContent = `${filter.subtitle} • Key [${filter.key}]`;
+  if (filterToastBadge) filterToastBadge.textContent = `[${filter.key}]`;
+  filterToast.style.borderColor = filter.color;
+  filterToast.style.boxShadow = `0 0 24px ${filter.glow}, 0 8px 32px rgba(0,0,0,0.6)`;
+  filterToast.classList.add("visible");
+
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => {
+    filterToast.classList.remove("visible");
+  }, 1600);
+}
+
+function setFilter(index, playSound = true) {
+  currentFilterIndex = (index + FILTERS.length) % FILTERS.length;
+  const filter = FILTERS[currentFilterIndex];
+
+  if (filterChipsContainer) {
+    const chips = filterChipsContainer.querySelectorAll(".filter-chip");
+    chips.forEach((chip, i) => {
+      chip.classList.toggle("active", i === currentFilterIndex);
+      if (i === currentFilterIndex) {
+        chip.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
+      }
+    });
+  }
+
+  showFilterToast(filter);
+
+  if (playSound) {
+    playFilterSwitchSound(380 + currentFilterIndex * 35);
+  }
+
+  if (appState === "puzzle" && puzzle.rawCropCanvas) {
+    reapplyFilterToPuzzle();
+  }
+}
+
+function toggleCamMode() {
+  fullCameraFilterEnabled = !fullCameraFilterEnabled;
+  if (camModeToggle && camModeLabel) {
+    camModeToggle.classList.toggle("active-full", fullCameraFilterEnabled);
+    camModeLabel.textContent = fullCameraFilterEnabled ? "FULL CAM" : "FRAME ONLY";
+  }
+  playFilterSwitchSound(620);
+}
+
+function reapplyFilterToPuzzle() {
+  if (!puzzle.rawCropCanvas || !puzzle.pieces.length) return;
+  const cropCanvas = document.createElement("canvas");
+  cropCanvas.width = puzzle.rawCropCanvas.width;
+  cropCanvas.height = puzzle.rawCropCanvas.height;
+  const cropCtx = cropCanvas.getContext("2d");
+  cropCtx.drawImage(puzzle.rawCropCanvas, 0, 0);
+
+  const imgData = cropCtx.getImageData(0, 0, cropCanvas.width, cropCanvas.height);
+  applyActiveFilter(imgData);
+  cropCtx.putImageData(imgData, 0, 0);
+  puzzle.fullPhotoboothCanvas = cropCanvas;
+
+  for (const piece of puzzle.pieces) {
+    const sx = piece.col * puzzle.tileW;
+    const sy = piece.row * puzzle.tileH;
+    const pctx = piece.canvas.getContext("2d");
+    pctx.clearRect(0, 0, piece.w, piece.h);
+    pctx.drawImage(cropCanvas, sx, sy, piece.w, piece.h, 0, 0, piece.w, piece.h);
+  }
+}
+
+let filterUIInitialized = false;
+function initFilterUI() {
+  if (!filterChipsContainer) return;
+  filterChipsContainer.innerHTML = "";
+
+  FILTERS.forEach((filter, idx) => {
+    const chip = document.createElement("button");
+    chip.type = "button";
+    chip.className = `filter-chip ${idx === currentFilterIndex ? "active" : ""}`;
+    chip.style.setProperty("--chip-color", filter.color);
+    chip.style.setProperty("--chip-glow", filter.glow);
+    chip.innerHTML = `
+      <span class="chip-key">[${filter.key}]</span>
+      <span class="chip-icon">${filter.icon}</span>
+      <span class="chip-name">${filter.name}</span>
+    `;
+    chip.addEventListener("click", () => {
+      setFilter(idx, true);
+    });
+    filterChipsContainer.appendChild(chip);
+  });
+
+  if (filterUIInitialized) return;
+  filterUIInitialized = true;
+
+  if (camModeToggle) {
+    camModeToggle.addEventListener("click", () => {
+      toggleCamMode();
+    });
+  }
+
+  window.addEventListener("keydown", (e) => {
+    if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA") return;
+    const key = e.key;
+
+    const filterKeyMap = {
+      "1": 0, "2": 1, "3": 2, "4": 3, "5": 4,
+      "6": 5, "7": 6, "8": 7, "9": 8, "0": 9,
+    };
+
+    if (key in filterKeyMap) {
+      e.preventDefault();
+      setFilter(filterKeyMap[key]);
+      return;
+    }
+
+    if (key.toLowerCase() === "f") {
+      e.preventDefault();
+      setFilter(currentFilterIndex + 1);
+      return;
+    }
+
+    if (key === "ArrowRight") {
+      e.preventDefault();
+      setFilter(currentFilterIndex + 1);
+      return;
+    }
+    if (key === "ArrowLeft") {
+      e.preventDefault();
+      setFilter(currentFilterIndex - 1);
+      return;
+    }
+
+    if (key.toLowerCase() === "c") {
+      e.preventDefault();
+      toggleCamMode();
+      return;
+    }
+  });
 }
 
 function shuffle(arr) {
@@ -472,8 +981,15 @@ function finishCountdownAndCapture(box) {
     0, 0, cropCanvas.width, cropCanvas.height
   );
 
+  // Preserve raw un-filtered image for live filter switching on puzzle pieces
+  const rawCanvas = document.createElement("canvas");
+  rawCanvas.width = cropCanvas.width;
+  rawCanvas.height = cropCanvas.height;
+  rawCanvas.getContext("2d").drawImage(cropCanvas, 0, 0);
+  puzzle.rawCropCanvas = rawCanvas;
+
   const fullImageData = cropCtx.getImageData(0, 0, cropCanvas.width, cropCanvas.height);
-  applyPhotoboothEffect(fullImageData);
+  applyActiveFilter(fullImageData);
   cropCtx.putImageData(fullImageData, 0, 0);
 
   puzzle.fullPhotoboothCanvas = cropCanvas;
@@ -749,21 +1265,24 @@ function drawBoardAndPieces() {
     ctx.restore();
   }
 
+  const filter = FILTERS[currentFilterIndex];
   ctx.save();
-  ctx.strokeStyle = puzzle.solved ? "#5fae6e" : "#f5c518";
+  ctx.strokeStyle = puzzle.solved ? "#34d399" : filter.color;
   ctx.lineWidth = 3;
   ctx.strokeRect(box.x, box.y, box.width, box.height);
   ctx.restore();
 
   if (puzzle.solved) {
     ctx.save();
-    ctx.fillStyle = "rgba(95,174,110,0.15)";
+    ctx.fillStyle = "rgba(52,211,153,0.15)";
     ctx.fillRect(box.x, box.y, box.width, box.height);
-    ctx.font = `${Math.max(20, box.width * 0.07)}px 'IBM Plex Mono', monospace`;
-    ctx.fillStyle = "#5fae6e";
+    ctx.font = `${Math.max(20, box.width * 0.07)}px 'Orbitron', monospace`;
+    ctx.fillStyle = "#34d399";
+    ctx.shadowColor = "rgba(52,211,153,0.8)";
+    ctx.shadowBlur = 16;
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillText("¡COMPLETO! — puño para guardar", box.x + box.width / 2, box.y + box.height / 2);
+    ctx.fillText("COMPLETE! — fist to save", box.x + box.width / 2, box.y + box.height / 2);
     ctx.restore();
   }
 }
@@ -774,7 +1293,7 @@ function updateProgressBadge() {
     return;
   }
   const placedCount = puzzle.pieces.filter((p) => p.placed).length;
-  progressText.textContent = `${placedCount} / ${puzzle.pieces.length} piezas colocadas`;
+  progressText.textContent = `${placedCount} / ${puzzle.pieces.length} pieces placed`;
   progressBadge.classList.add("visible");
   progressBadge.classList.toggle("solved", puzzle.solved);
 }
@@ -785,9 +1304,15 @@ function drawVideoFrame() {
   ctx.scale(-1, 1);
   ctx.drawImage(videoEl, 0, 0, canvas.width, canvas.height);
   ctx.restore();
+
+  if (fullCameraFilterEnabled && appState === "tracking") {
+    const fullImg = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    applyActiveFilter(fullImg);
+    ctx.putImageData(fullImg, 0, 0);
+  }
 }
 
-function applyBWInsideBox(box) {
+function applyActiveFilterToBox(box) {
   const x = Math.max(0, Math.round(box.x));
   const y = Math.max(0, Math.round(box.y));
   const w = Math.min(canvas.width - x, Math.round(box.width));
@@ -795,17 +1320,18 @@ function applyBWInsideBox(box) {
   if (w <= 0 || h <= 0) return;
 
   const region = ctx.getImageData(x, y, w, h);
-  applyPhotoboothEffect(region);
+  applyActiveFilter(region);
   ctx.putImageData(region, x, y);
 }
 
 function drawLiveFrameOverlay(box) {
+  const filter = FILTERS[currentFilterIndex];
   ctx.save();
-  ctx.strokeStyle = "#f5c518";
+  ctx.strokeStyle = filter.color;
   ctx.lineWidth = 3;
   ctx.strokeRect(box.x, box.y, box.width, box.height);
 
-  const cornerLen = 18;
+  const cornerLen = 20;
   ctx.lineWidth = 4;
   const corners = [
     [box.x, box.y, 1, 1],
@@ -820,6 +1346,17 @@ function drawLiveFrameOverlay(box) {
     ctx.lineTo(cx + cornerLen * dx, cy);
     ctx.stroke();
   }
+
+  // Floating filter label above frame
+  ctx.font = "bold 11px 'Space Mono', monospace";
+  ctx.fillStyle = filter.color;
+  ctx.shadowColor = filter.glow;
+  ctx.shadowBlur = 12;
+  ctx.fillText(
+    `${filter.icon} ${filter.name} [KEY ${filter.key}]`,
+    box.x + 8,
+    Math.max(22, box.y - 10)
+  );
   ctx.restore();
 }
 
@@ -964,7 +1501,7 @@ function finishShatter() {
   shatter.fragments = [];
   if (shatter.pendingCanvas) {
     addToGallery(shatter.pendingCanvas);
-    statusText.textContent = "¡guardado en la tira!";
+    statusText.textContent = "saved to photo booth!";
     shatter.pendingCanvas = null;
   }
   resetPuzzleOnly();
@@ -972,7 +1509,7 @@ function finishShatter() {
 
 function handleFistReset() {
   if (appState !== "puzzle") {
-    statusText.textContent = "reiniciado (puño)";
+    statusText.textContent = "reset (fist)";
     resetPuzzleOnly();
     return;
   }
@@ -984,7 +1521,7 @@ function handleFistReset() {
     shatter.pendingCanvas = puzzle.fullPhotoboothCanvas;
     startShatter(puzzle.fullPhotoboothCanvas, puzzle.boardBox);
   } else {
-    statusText.textContent = "reiniciado (puño)";
+    statusText.textContent = "reset (fist)";
     resetPuzzleOnly();
   }
 }
@@ -995,7 +1532,7 @@ let fistHoldCounter = 0;
 function processResults(result) {
   if (appState === "shattering") {
     updateAndDrawShatter();
-    statusText.textContent = "guardando…";
+    statusText.textContent = "saving…";
     return;
   }
 
@@ -1014,12 +1551,12 @@ function processResults(result) {
     if (appState === "tracking") {
       const sinceLastSeen = performance.now() - lastSeenFrame.at;
       if (lastSeenFrame.box && sinceLastSeen < FRAME_GRACE_MS) {
-        applyBWInsideBox(lastSeenFrame.box);
+        applyActiveFilterToBox(lastSeenFrame.box);
         drawLiveFrameOverlay(lastSeenFrame.box);
       }
       statusText.textContent = isStripFull()
-        ? "tira completa — descarga o reinicia"
-        : "buscando manos…";
+        ? "photo booth full — download or reset"
+        : "looking for hands…";
       return;
     }
 
@@ -1033,8 +1570,8 @@ function processResults(result) {
       updateProgressBadge();
       drawBoardAndPieces();
       statusText.textContent = puzzle.solved
-        ? "¡rompecabezas completo! cierra el puño para guardarlo"
-        : "arma el rompecabezas con pinch";
+        ? "puzzle complete! close your fist to save"
+        : "arrange the puzzle with pinch";
       return;
     }
 
@@ -1058,7 +1595,7 @@ function processResults(result) {
 
   if (appState === "tracking") {
     if (isStripFull()) {
-      statusText.textContent = "tira completa — descarga o reinicia";
+      statusText.textContent = "photo booth full — download or reset";
       return;
     }
     if (handsLandmarks.length === 2) {
@@ -1068,7 +1605,7 @@ function processResults(result) {
       const frameBox = computeHandFrame(indexA, indexB);
 
       if (frameBox.width > 4 && frameBox.height > 4) {
-        applyBWInsideBox(frameBox);
+        applyActiveFilterToBox(frameBox);
         drawLiveFrameOverlay(frameBox);
         lastSeenFrame.box = frameBox;
         lastSeenFrame.at = performance.now();
@@ -1081,7 +1618,7 @@ function processResults(result) {
           freezeGate.since = performance.now();
         }
         statusDot.className = "status-dot armed";
-        statusText.textContent = "sostén el pinch…";
+        statusText.textContent = "hold the pinch…";
 
         if (performance.now() - freezeGate.since > FREEZE_HOLD_MS) {
           freezeGate.holding = false;
@@ -1089,17 +1626,17 @@ function processResults(result) {
         }
       } else {
         freezeGate.holding = false;
-        statusText.textContent = "manos en seguimiento";
+        statusText.textContent = "hands tracking";
       }
     } else {
       freezeGate.holding = false;
       const sinceLastSeen = performance.now() - lastSeenFrame.at;
       if (lastSeenFrame.box && sinceLastSeen < FRAME_GRACE_MS) {
-        applyBWInsideBox(lastSeenFrame.box);
+        applyActiveFilterToBox(lastSeenFrame.box);
         drawLiveFrameOverlay(lastSeenFrame.box);
-        statusText.textContent = "manos en seguimiento";
+        statusText.textContent = "hands tracking";
       } else {
-        statusText.textContent = "manos en seguimiento";
+        statusText.textContent = "hands tracking";
       }
     }
     return;
@@ -1134,9 +1671,9 @@ function processResults(result) {
 
     statusText.textContent = puzzle.solved
       ? (fistHoldCounter > 0
-          ? `guardando… sostén el puño (${fistHoldCounter}/${FIST_HOLD_FRAMES})`
-          : "¡rompecabezas completo! cierra el puño para guardarlo")
-      : "arma el rompecabezas con pinch";
+          ? `saving… hold fist (${fistHoldCounter}/${FIST_HOLD_FRAMES})`
+          : "puzzle complete! close your fist to save")
+      : "arrange the puzzle with pinch";
   }
 }
 
@@ -1164,7 +1701,7 @@ function showLoaderError(message) {
 function resetLoaderUI() {
   loadingOverlay.classList.remove("hidden");
   loaderText.style.color = "";
-  loaderText.textContent = "cargando modelo HandLandmarker…";
+  loaderText.textContent = "loading HandLandmarker model…";
   loaderRetry.classList.add("hidden");
   errorBanner.style.display = "none";
 }
@@ -1176,7 +1713,7 @@ async function boot() {
   const watchdogMs = (LOAD_TIMEOUT_MS * 2) + 5000;
   const watchdog = setTimeout(() => {
     if (!settled) {
-      showLoaderError("La carga está tardando demasiado. Pulsa reintentar o revisa tu conexión.");
+      showLoaderError("Loading is taking too long. Press retry or check your connection.");
     }
   }, watchdogMs);
 
@@ -1190,17 +1727,17 @@ async function boot() {
     settled = true;
     clearTimeout(watchdog);
     loadingOverlay.classList.add("hidden");
-    statusText.textContent = "listo";
+    statusText.textContent = "ready";
     requestAnimationFrame(renderLoop);
   } catch (err) {
     settled = true;
     clearTimeout(watchdog);
     if (err && err.name === "NotAllowedError") {
-      showLoaderError("Permiso de cámara denegado. Habilítalo en la configuración del navegador y pulsa reintentar.");
+      showLoaderError("Camera permission denied. Enable it in browser settings and press retry.");
     } else if (err && err.name === "NotFoundError") {
-      showLoaderError("No se encontró ninguna webcam disponible.");
+      showLoaderError("No webcam found.");
     } else {
-      showLoaderError((err && err.message) || "Error iniciando la app.");
+      showLoaderError((err && err.message) || "Error starting the app.");
     }
   }
 }
@@ -1217,10 +1754,11 @@ if (downloadStripBtn) {
 if (resetAllBtn) {
   resetAllBtn.addEventListener("click", () => {
     const confirmed = window.confirm(
-      "¿Seguro que quieres borrar toda la tira de fotos y empezar de nuevo?"
+      "Are you sure you want to clear the photo booth and start over?"
     );
     if (confirmed) resetEverything();
   });
 }
 
+initFilterUI();
 boot();

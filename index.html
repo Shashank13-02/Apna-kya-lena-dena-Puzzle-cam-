@@ -1,9 +1,12 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="en">
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Puzzle Cam — Gesture Capture</title>
+<title>PuzzleCam — Gesture Capture</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Space+Grotesk:wght@300;400;500;600&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
 <link rel="stylesheet" href="css/styles.css" />
 </head>
 <body>
@@ -18,18 +21,54 @@
       <div class="brand">PUZZLE·CAM <small>hand-frame capture</small></div>
       <div class="status-pill">
         <span id="statusDot" class="status-dot"></span>
-        <span id="statusText">iniciando cámara…</span>
+        <span id="statusText">starting camera…</span>
       </div>
     </div>
 
     <div id="progressBadge" class="progress-badge">
-      <span id="progressText">0 / 9 piezas colocadas</span>
+      <span id="progressText">0 / 9 pieces placed</span>
+    </div>
+
+    <!-- Aesthetic Filter Toast Notification -->
+    <div id="filterToast" class="filter-toast">
+      <span class="filter-toast-icon" id="filterToastIcon">⚡</span>
+      <div class="filter-toast-text">
+        <div class="filter-toast-name" id="filterToastName">CYBERPUNK</div>
+        <div class="filter-toast-sub" id="filterToastSub">Neon Tokyo • Key [1]</div>
+      </div>
+      <span class="filter-toast-badge" id="filterToastBadge">[1]</span>
+    </div>
+
+    <!-- Aesthetic Filter Control Bar -->
+    <div id="filterBarContainer" class="filter-bar-container">
+      <div class="filter-bar-header">
+        <div class="filter-bar-title-wrap">
+          <span class="filter-bar-glow-dot"></span>
+          <span class="filter-bar-title">LIVE FILTERS</span>
+          <span class="filter-bar-shortcuts">Keys <strong>[1–9, 0]</strong> • <strong>[F]</strong> next</span>
+        </div>
+        <button type="button" id="camModeToggle" class="cam-mode-toggle" title="Toggle filter between Hand Frame Only and Full Video Feed (Key C)">
+          <span class="mode-indicator-dot"></span>
+          <span id="camModeLabel">FRAME ONLY</span>
+          <span class="key-shortcut">[C]</span>
+        </button>
+      </div>
+      <div id="filterChips" class="filter-chips"></div>
+    </div>
+
+    <!-- HUD Bottom Gestures & Keys Guide -->
+    <div class="hud-bottom">
+      <div class="gesture-key">
+        <div class="item"><span class="swatch pinch"></span><span>pinch: frame / drag</span></div>
+        <div class="item"><span class="swatch drag"></span><span>hold: lock</span></div>
+        <div class="item"><span class="swatch fist"></span><span>fist: save / reset</span></div>
+      </div>
     </div>
 
     <div id="loadingOverlay">
-      <div class="loader-text" id="loaderText">cargando modelo HandLandmarker…</div>
+      <div class="loader-text" id="loaderText">loading HandLandmarker model…</div>
       <div class="loader-bar"></div>
-      <button type="button" id="loaderRetry" class="loader-retry hidden">reintentar</button>
+      <button type="button" id="loaderRetry" class="loader-retry hidden">retry</button>
     </div>
 
     <div id="errorBanner"></div>
@@ -37,23 +76,23 @@
 
   <aside id="gallery">
     <div class="gallery-head">
-      <span class="gallery-title">Tira</span>
+      <span class="gallery-title">Photo Booth</span>
       <span class="gallery-count" id="galleryCount">0 / 3</span>
     </div>
 
     <div class="strip-complete-msg" id="stripCompleteMsg">
-      tira completa — descarga o reinicia para seguir
+      photo booth complete — download or reset to continue
     </div>
 
     <div id="galleryStrip" class="gallery-strip">
       <div class="gallery-empty" id="galleryEmpty">
-        Tus rompecabezas completados<br/>aparecerán aquí.
+        Your completed puzzles<br/>will appear here.
       </div>
     </div>
 
     <div class="gallery-actions">
-      <button type="button" id="downloadStripBtn" class="gallery-action-btn" disabled>descargar tira</button>
-      <button type="button" id="resetAllBtn" class="gallery-action-btn gallery-action-btn--danger">reiniciar todo</button>
+      <button type="button" id="downloadStripBtn" class="gallery-action-btn" disabled>download photo booth</button>
+      <button type="button" id="resetAllBtn" class="gallery-action-btn gallery-action-btn--danger">reset all</button>
     </div>
   </aside>
 

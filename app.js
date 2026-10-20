@@ -1036,6 +1036,23 @@ function initFilterUI() {
       toggleCamMode();
       return;
     }
+
+    if (key.toLowerCase() === "r" || key === "Escape") {
+      if (appState === "puzzle" || appState === "countdown") {
+        e.preventDefault();
+        resetPuzzleOnly();
+        statusText.textContent = "retake shot — frame with hands";
+        return;
+      }
+    }
+
+    if (key.toLowerCase() === "s" || key === " " || key === "Enter") {
+      if (appState === "puzzle" && puzzle.solved) {
+        e.preventDefault();
+        handleFistReset();
+        return;
+      }
+    }
   });
 }
 
@@ -1043,6 +1060,21 @@ function shuffle(arr) {
   for (let i = arr.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
     [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+
+function generateDerangement(n) {
+  const arr = Array.from({ length: n }, (_, i) => i);
+  let deranged = false;
+  let attempts = 0;
+  while (!deranged && attempts < 100) {
+    shuffle(arr);
+    deranged = arr.every((val, idx) => val !== idx);
+    attempts++;
+  }
+  if (!deranged) {
+    return Array.from({ length: n }, (_, i) => (i + 1) % n);
   }
   return arr;
 }
@@ -1116,21 +1148,22 @@ function finishCountdownAndCapture(box) {
       slots.push({ x: box.x + col * tileW, y: box.y + row * tileH });
     }
   }
-  shuffle(slots);
+
+  // Guarantee a true scramble: every single piece starts in a different cell than its solved position
+  const scrambledOrder = generateDerangement(9);
 
   pieces.forEach((piece, i) => {
-    piece.x = slots[i].x;
-    piece.y = slots[i].y;
-    if (isNearOwnCell(piece, box, tileW, tileH)) {
-      snapPieceToCell(piece, box, tileW, tileH);
-    }
+    const targetSlot = slots[scrambledOrder[i]];
+    piece.x = targetSlot.x;
+    piece.y = targetSlot.y;
+    piece.placed = false; // Always start unsolved
   });
 
   puzzle.boardBox = box;
   puzzle.pieces = pieces;
   puzzle.tileW = tileW;
   puzzle.tileH = tileH;
-  puzzle.solved = pieces.every((p) => p.placed);
+  puzzle.solved = false;
   appState = "puzzle";
   fistHoldCounter = 0;
   updateProgressBadge();
@@ -1427,7 +1460,7 @@ function drawBoardAndPieces() {
     ctx.fillStyle = "#fed7aa";
     ctx.shadowColor = "rgba(255, 153, 51, 0.6)";
     ctx.shadowBlur = 10;
-    ctx.fillText("HOLD CLOSED FIST ✊ TO SAVE", bannerX + bannerW / 2, bannerY + 48);
+    ctx.fillText("CLOSE FIST ✊ TO SAVE TO PHOTO BOOTH", bannerX + bannerW / 2, bannerY + 48);
 
     ctx.restore();
   }
@@ -1439,7 +1472,9 @@ function updateProgressBadge() {
     return;
   }
   const placedCount = puzzle.pieces.filter((p) => p.placed).length;
-  progressText.textContent = `${placedCount} / ${puzzle.pieces.length} pieces placed`;
+  progressText.textContent = puzzle.solved
+    ? "✨ PUZZLE COMPLETE! CLOSE FIST ✊ TO SAVE ✨"
+    : `${placedCount} / ${puzzle.pieces.length} placed`;
   progressBadge.classList.add("visible");
   progressBadge.classList.toggle("solved", puzzle.solved);
 }
@@ -1624,27 +1659,27 @@ function drawFistProgressIndicator(handsLandmarks, progress, isSolved) {
     cy = canvas.height / 2;
   }
 
-  const r = 34;
+  const r = 36;
   ctx.save();
   ctx.beginPath();
   ctx.arc(cx, cy, r, 0, Math.PI * 2);
-  ctx.fillStyle = "rgba(5, 18, 12, 0.88)";
+  ctx.fillStyle = "rgba(5, 18, 12, 0.92)";
   ctx.fill();
-  ctx.strokeStyle = "rgba(255, 255, 255, 0.2)";
+  ctx.strokeStyle = "rgba(255, 255, 255, 0.25)";
   ctx.lineWidth = 3;
   ctx.stroke();
 
-  const color = isSolved ? "#34d399" : "#ff9933";
+  const color = "#34d399";
   ctx.beginPath();
   ctx.arc(cx, cy, r, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * progress, false);
   ctx.strokeStyle = color;
   ctx.lineWidth = 5;
   ctx.lineCap = "round";
   ctx.shadowColor = color;
-  ctx.shadowBlur = 16;
+  ctx.shadowBlur = 18;
   ctx.stroke();
 
-  ctx.font = "20px sans-serif";
+  ctx.font = "22px sans-serif";
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   ctx.fillText("✊", cx, cy);
@@ -1652,9 +1687,9 @@ function drawFistProgressIndicator(handsLandmarks, progress, isSolved) {
   ctx.font = "bold 11px 'Space Mono', monospace";
   ctx.fillStyle = color;
   ctx.shadowColor = color;
-  ctx.shadowBlur = 10;
-  const label = isSolved ? `SAVING ${Math.round(progress * 100)}%` : `RESETTING ${Math.round(progress * 100)}%`;
-  ctx.fillText(label, cx, cy + r + 16);
+  ctx.shadowBlur = 12;
+  const label = `SAVING PHOTO ${Math.round(progress * 100)}%`;
+  ctx.fillText(label, cx, cy + r + 18);
 
   ctx.restore();
 }
@@ -1807,21 +1842,29 @@ function finishShatter() {
 }
 
 function handleFistReset() {
-  if (appState !== "puzzle") {
-    statusText.textContent = "reset (fist)";
-    resetPuzzleOnly();
-    return;
-  }
+  if (appState !== "puzzle") return;
 
   const reallySolved = reconcilePlacedState(puzzle.boardBox, puzzle.tileW, puzzle.tileH);
   puzzle.solved = reallySolved;
 
-  if (reallySolved && puzzle.fullPhotoboothCanvas) {
-    shatter.pendingCanvas = puzzle.fullPhotoboothCanvas;
-    startShatter(puzzle.fullPhotoboothCanvas, puzzle.boardBox);
+  if (reallySolved) {
+    let saveCanvas = puzzle.fullPhotoboothCanvas;
+    if (!saveCanvas && puzzle.pieces.length) {
+      saveCanvas = document.createElement("canvas");
+      saveCanvas.width = puzzle.boardBox.width;
+      saveCanvas.height = puzzle.boardBox.height;
+      const sCtx = saveCanvas.getContext("2d");
+      puzzle.pieces.forEach((p) => {
+        sCtx.drawImage(p.canvas, p.col * puzzle.tileW, p.row * puzzle.tileH);
+      });
+    }
+    if (saveCanvas) {
+      shatter.pendingCanvas = saveCanvas;
+      startShatter(saveCanvas, puzzle.boardBox);
+    }
   } else {
-    statusText.textContent = "reset (fist)";
-    resetPuzzleOnly();
+    const placedCount = puzzle.pieces.filter((p) => p.placed).length;
+    statusText.textContent = `solve puzzle to save (${placedCount} / 9 placed)`;
   }
 }
 
@@ -1868,9 +1911,10 @@ function processResults(result) {
       puzzle.solved = reconcilePlacedState(puzzle.boardBox, puzzle.tileW, puzzle.tileH);
       updateProgressBadge();
       drawBoardAndPieces();
+      const placedCount = puzzle.pieces.filter((p) => p.placed).length;
       statusText.textContent = puzzle.solved
-        ? "puzzle complete! close your fist to save"
-        : "arrange the puzzle with pinch";
+        ? "✨ puzzle complete! close your fist ✊ to save to photo booth"
+        : `arrange pieces with pinch (${placedCount} / 9 placed)`;
       return;
     }
 
@@ -1881,7 +1925,7 @@ function processResults(result) {
 
   const anyFist = handsLandmarks.some((lm) => isFist(lm));
   const draggingNow = drag.activeHand !== null && drag.piece !== null;
-  if (anyFist && !draggingNow && appState === "puzzle") {
+  if (anyFist && !draggingNow && appState === "puzzle" && puzzle.solved) {
     fistHoldCounter++;
     if (fistHoldCounter >= FIST_HOLD_FRAMES) {
       fistHoldCounter = 0;
@@ -1996,13 +2040,12 @@ function processResults(result) {
       drawFistProgressIndicator(handsLandmarks, fistHoldCounter / FIST_HOLD_FRAMES, puzzle.solved);
     }
 
+    const placedCount = puzzle.pieces.filter((p) => p.placed).length;
     statusText.textContent = puzzle.solved
       ? (fistHoldCounter > 0
-          ? `saving… hold fist steady ✊ (${Math.round((fistHoldCounter / FIST_HOLD_FRAMES) * 100)}%)`
-          : "✨ puzzle complete! close your fist ✊ to save")
-      : (fistHoldCounter > 0
-          ? `resetting… hold fist (${Math.round((fistHoldCounter / FIST_HOLD_FRAMES) * 100)}%)`
-          : "arrange pieces with pinch • fist ✊ to reset");
+          ? `saving to photo booth… hold fist steady ✊ (${Math.round((fistHoldCounter / FIST_HOLD_FRAMES) * 100)}%)`
+          : "✨ puzzle complete! close your fist ✊ to save to photo booth")
+      : `arrange pieces with pinch (${placedCount} / 9 placed) • [R] to retake`;
   }
 }
 
@@ -2086,6 +2129,84 @@ if (resetAllBtn) {
       "Are you sure you want to clear the photo booth and start over?"
     );
     if (confirmed) resetEverything();
+  });
+}
+function getCanvasCoords(e) {
+  const rect = canvas.getBoundingClientRect();
+  const scaleX = canvas.width / rect.width;
+  const scaleY = canvas.height / rect.height;
+  return {
+    x: (e.clientX - rect.left) * scaleX,
+    y: (e.clientY - rect.top) * scaleY,
+  };
+}
+
+canvas.addEventListener("pointerdown", (e) => {
+  if (appState !== "puzzle") return;
+  const pt = getCanvasCoords(e);
+
+  if (puzzle.solved) {
+    handleFistReset();
+    return;
+  }
+
+  const piece = findNearestPiece(pt.x, pt.y);
+  if (piece) {
+    drag.activeHand = "mouse";
+    drag.piece = piece;
+    drag.offsetX = pt.x - piece.x;
+    drag.offsetY = pt.y - piece.y;
+    piece.dragging = true;
+    piece.placed = false;
+    if (canvas.setPointerCapture) {
+      try {
+        canvas.setPointerCapture(e.pointerId);
+      } catch (_) {}
+    }
+  }
+});
+
+canvas.addEventListener("pointermove", (e) => {
+  if (appState !== "puzzle") return;
+  if (drag.activeHand === "mouse" && drag.piece) {
+    const pt = getCanvasCoords(e);
+    drag.piece.x = pt.x - drag.offsetX;
+    drag.piece.y = pt.y - drag.offsetY;
+  }
+});
+
+canvas.addEventListener("pointerup", (e) => {
+  if (appState !== "puzzle") return;
+  if (drag.activeHand === "mouse" && drag.piece) {
+    const pt = getCanvasCoords(e);
+    handleDragForHand("mouse", false, pt);
+  }
+});
+
+canvas.addEventListener("pointercancel", (e) => {
+  if (appState !== "puzzle") return;
+  if (drag.activeHand === "mouse" && drag.piece) {
+    const pt = getCanvasCoords(e);
+    handleDragForHand("mouse", false, pt);
+  }
+});
+
+const retakePuzzleBtn = document.getElementById("retakePuzzleBtn");
+if (retakePuzzleBtn) {
+  retakePuzzleBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    if (appState === "puzzle") {
+      resetPuzzleOnly();
+      statusText.textContent = "retake shot — frame with hands";
+    }
+  });
+}
+
+if (progressBadge) {
+  progressBadge.addEventListener("click", () => {
+    if (appState === "puzzle" && puzzle.solved) {
+      handleFistReset();
+    }
   });
 }
 

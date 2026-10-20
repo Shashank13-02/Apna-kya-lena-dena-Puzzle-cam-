@@ -224,10 +224,10 @@ canvas#sceneCanvas {
   font-size: 10px;
   letter-spacing: 0.1em;
   text-transform: uppercase;
-  padding: 8px 14px;
+  padding: 6px 12px;
   border-radius: 20px;
   border: 1px solid rgba(192,132,252,0.4);
-  background: rgba(5,5,15,0.8);
+  background: rgba(5,5,15,0.88);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   color: var(--signal);
@@ -237,7 +237,28 @@ canvas#sceneCanvas {
   opacity: 0;
   transform: translateY(-8px) scale(0.95);
   transition: opacity 0.3s ease, transform 0.3s ease, border-color 0.3s ease, color 0.3s ease, box-shadow 0.3s ease;
-  pointer-events: none;
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.retake-btn {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: #fed7aa;
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  padding: 3px 8px;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.retake-btn:hover {
+  background: rgba(255, 153, 51, 0.25);
+  border-color: #ff9933;
+  color: #fff;
+  box-shadow: 0 0 10px rgba(255, 153, 51, 0.4);
 }
 .progress-badge.visible { opacity: 1; transform: translateY(0) scale(1); }
 .progress-badge.solved {
@@ -246,6 +267,7 @@ canvas#sceneCanvas {
   text-shadow: 0 0 10px var(--glow-green);
   box-shadow: 0 0 16px rgba(52,211,153,0.2), inset 0 1px 0 rgba(255,255,255,0.05);
   animation: solvedBadgePulse 1.2s ease-in-out infinite;
+  cursor: pointer;
 }
 @keyframes solvedBadgePulse {
   0%, 100% { box-shadow: 0 0 12px rgba(52,211,153,0.2); }

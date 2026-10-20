@@ -19,9 +19,19 @@
 
     <div class="hud-top">
       <div class="brand">APNA·KYA·LENA·DENA <small>poora desh garba me, main idhar webcam pe</small></div>
-      <div class="status-pill">
-        <span id="statusDot" class="status-dot"></span>
-        <span id="statusText">starting camera…</span>
+      <div class="hud-top-right">
+        <div class="status-pill">
+          <span id="statusDot" class="status-dot"></span>
+          <span id="statusText">starting camera…</span>
+        </div>
+        <button type="button" id="openGalleryBtn" class="open-gallery-tab" title="Open Photo Booth (M)" aria-label="Open Photo Booth">
+          <span class="open-tab-icon">📸</span>
+          <span class="open-tab-text">PHOTO BOOTH</span>
+          <span class="open-tab-count" id="tabGalleryCount">0 / 3</span>
+          <svg class="open-tab-arrow" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="15 18 9 12 15 6"></polyline>
+          </svg>
+        </button>
       </div>
     </div>
 
@@ -93,8 +103,15 @@
 
   <aside id="gallery">
     <div class="gallery-head">
-      <span class="gallery-title">Photo Booth</span>
-      <span class="gallery-count" id="galleryCount">0 / 3</span>
+      <div class="gallery-head-info">
+        <span class="gallery-title">Photo Booth</span>
+        <span class="gallery-count" id="galleryCount">0 / 3</span>
+      </div>
+      <button type="button" id="minimizeGalleryBtn" class="gallery-minimize-btn" title="Minimize Photo Booth (M)" aria-label="Minimize Photo Booth">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="9 18 15 12 9 6"></polyline>
+        </svg>
+      </button>
     </div>
 
     <div class="strip-complete-msg" id="stripCompleteMsg">

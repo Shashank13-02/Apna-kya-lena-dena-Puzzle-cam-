@@ -52,12 +52,56 @@ const errorBanner = document.getElementById("errorBanner");
 const progressBadge = document.getElementById("progressBadge");
 const progressText = document.getElementById("progressText");
 
+const galleryEl = document.getElementById("gallery");
 const galleryStrip = document.getElementById("galleryStrip");
 const galleryEmpty = document.getElementById("galleryEmpty");
 const galleryCount = document.getElementById("galleryCount");
 const downloadStripBtn = document.getElementById("downloadStripBtn");
 const resetAllBtn = document.getElementById("resetAllBtn");
 const stripCompleteMsg = document.getElementById("stripCompleteMsg");
+const minimizeGalleryBtn = document.getElementById("minimizeGalleryBtn");
+const openGalleryBtn = document.getElementById("openGalleryBtn");
+const tabGalleryCount = document.getElementById("tabGalleryCount");
+
+function updateGalleryCountText(text) {
+  if (galleryCount) galleryCount.textContent = text;
+  if (tabGalleryCount) tabGalleryCount.textContent = text;
+}
+
+function setGalleryMinimized(minimized) {
+  if (!galleryEl) return;
+  if (minimized) {
+    galleryEl.classList.add("minimized");
+    if (openGalleryBtn) openGalleryBtn.classList.add("visible");
+  } else {
+    galleryEl.classList.remove("minimized");
+    if (openGalleryBtn) openGalleryBtn.classList.remove("visible");
+  }
+
+  // Refit canvas smoothly during transition
+  const start = performance.now();
+  function animateResize() {
+    fitCanvasToWindow();
+    if (performance.now() - start < 400) {
+      requestAnimationFrame(animateResize);
+    } else {
+      fitCanvasToWindow();
+    }
+  }
+  requestAnimationFrame(animateResize);
+}
+
+if (minimizeGalleryBtn) {
+  minimizeGalleryBtn.addEventListener("click", () => {
+    setGalleryMinimized(true);
+  });
+}
+
+if (openGalleryBtn) {
+  openGalleryBtn.addEventListener("click", () => {
+    setGalleryMinimized(false);
+  });
+}
 
 const filterToast = document.getElementById("filterToast");
 const filterToastIcon = document.getElementById("filterToastIcon");
@@ -97,7 +141,7 @@ function addToGallery(snapshotCanvas) {
 
   galleryEntries.push({ canvas: snapshotCanvas, time: Date.now() });
   renderGalleryThumb(snapshotCanvas, galleryEntries.length);
-  galleryCount.textContent = `${galleryEntries.length} / ${STRIP_MAX_PHOTOS}`;
+  updateGalleryCountText(`${galleryEntries.length} / ${STRIP_MAX_PHOTOS}`);
   if (galleryEmpty) galleryEmpty.style.display = "none";
 
   if (galleryEntries.length >= STRIP_MAX_PHOTOS) {
@@ -173,7 +217,7 @@ function downloadPhotoStrip() {
 function resetEverything() {
   galleryEntries.length = 0;
   galleryStrip.innerHTML = "";
-  galleryCount.textContent = `0 / ${STRIP_MAX_PHOTOS}`;
+  updateGalleryCountText(`0 / ${STRIP_MAX_PHOTOS}`);
   if (galleryEmpty) {
     galleryEmpty.style.display = "block";
     galleryStrip.appendChild(galleryEmpty);
@@ -991,6 +1035,14 @@ function initFilterUI() {
       e.preventDefault();
       toggleCamMode();
       return;
+    }
+
+    if (key.toLowerCase() === "m" || key.toLowerCase() === "b") {
+      if (galleryEl) {
+        e.preventDefault();
+        setGalleryMinimized(!galleryEl.classList.contains("minimized"));
+        return;
+      }
     }
 
     if (key.toLowerCase() === "r" || key === "Escape") {

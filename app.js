@@ -16,11 +16,11 @@ const LM = {
   PINKY_MCP: 17,
 };
 
-const PINCH_THRESHOLD = 0.055;
+const PINCH_THRESHOLD = 0.048;
 const FRAME_PADDING = 28;
-const FREEZE_HOLD_MS = 250;
+const FREEZE_HOLD_MS = 550;
 const COUNTDOWN_SECONDS = 3;
-const FIST_HOLD_FRAMES = 12;
+const FIST_HOLD_FRAMES = 24;
 const SNAP_DISTANCE_RATIO = 0.45;
 const GRID = 3;
 const LOAD_TIMEOUT_MS = 20000;
@@ -339,23 +339,73 @@ function dist2D(a, b) {
   return Math.sqrt(dx * dx + dy * dy);
 }
 
-function isPinching(landmarks) {
-  return dist2D(landmarks[LM.THUMB_TIP], landmarks[LM.INDEX_TIP]) < PINCH_THRESHOLD;
+function isFist(landmarks) {
+  if (!landmarks || landmarks.length < 21) return false;
+  const wrist = landmarks[LM.WRIST];
+  const fingers = [
+    { tip: LM.INDEX_TIP, pip: 6, mcp: LM.INDEX_MCP },
+    { tip: LM.MIDDLE_TIP, pip: 10, mcp: LM.MIDDLE_MCP },
+    { tip: LM.RING_TIP, pip: 14, mcp: LM.RING_MCP },
+    { tip: LM.PINKY_TIP, pip: 18, mcp: LM.PINKY_MCP },
+  ];
+
+  let curledCount = 0;
+  for (const f of fingers) {
+    const dTipWrist = dist2D(landmarks[f.tip], wrist);
+    const dPipWrist = dist2D(landmarks[f.pip], wrist);
+    const dTipMcp = dist2D(landmarks[f.tip], landmarks[f.mcp]);
+    const dPipMcp = dist2D(landmarks[f.pip], landmarks[f.mcp]);
+    // Curled if fingertip is closer to wrist than PIP or folded toward MCP knuckle
+    if (dTipWrist < dPipWrist || dTipMcp < dPipMcp) {
+      curledCount++;
+    }
+  }
+
+  // Thumb folded across palm or near index knuckle
+  const thumbTip = landmarks[LM.THUMB_TIP];
+  const indexMcp = landmarks[LM.INDEX_MCP];
+  const middleMcp = landmarks[LM.MIDDLE_MCP];
+  const pinkyMcp = landmarks[LM.PINKY_MCP];
+  const thumbTucked =
+    dist2D(thumbTip, indexMcp) < 0.14 ||
+    dist2D(thumbTip, middleMcp) < 0.14 ||
+    dist2D(thumbTip, pinkyMcp) < dist2D(indexMcp, pinkyMcp);
+
+  return curledCount >= 3 && thumbTucked;
 }
 
-function isFist(landmarks) {
+function isPinching(landmarks) {
+  if (!landmarks || landmarks.length < 21) return false;
+
+  // Rule 1: A fist can NEVER be a pinch!
+  if (isFist(landmarks)) return false;
+
+  const thumbTip = landmarks[LM.THUMB_TIP];
+  const indexTip = landmarks[LM.INDEX_TIP];
   const wrist = landmarks[LM.WRIST];
-  const pairs = [
-    [LM.INDEX_TIP, LM.INDEX_MCP],
-    [LM.MIDDLE_TIP, LM.MIDDLE_MCP],
-    [LM.RING_TIP, LM.RING_MCP],
-    [LM.PINKY_TIP, LM.PINKY_MCP],
-  ];
-  let curled = 0;
-  for (const [tipIdx, mcpIdx] of pairs) {
-    if (dist2D(landmarks[tipIdx], wrist) < dist2D(landmarks[mcpIdx], wrist)) curled++;
+  const indexMcp = landmarks[LM.INDEX_MCP];
+
+  // Rule 2: Thumb tip and index tip must be close
+  const dThumbIndex = dist2D(thumbTip, indexTip);
+  if (dThumbIndex >= PINCH_THRESHOLD) return false;
+
+  // Rule 3: The index finger MUST NOT be collapsed back into the palm
+  const dIndexTipWrist = dist2D(indexTip, wrist);
+  const dIndexMcpWrist = dist2D(indexMcp, wrist);
+  if (dIndexTipWrist < dIndexMcpWrist * 0.95) return false;
+
+  // Rule 4: At least one non-index finger (middle or pinky) should be extended away from wrist
+  const middleTip = landmarks[LM.MIDDLE_TIP];
+  const pinkyTip = landmarks[LM.PINKY_TIP];
+  const middleMcp = landmarks[LM.MIDDLE_MCP];
+  const middleOpen = dist2D(middleTip, wrist) > dist2D(middleMcp, wrist);
+  const pinkyOpen = dist2D(pinkyTip, wrist) > dist2D(landmarks[LM.PINKY_MCP], wrist);
+  if (!middleOpen && !pinkyOpen) {
+    // Both middle and pinky are curled into palm -> clenched hand
+    return false;
   }
-  return curled >= 4;
+
+  return true;
 }
 
 function toPixel(landmarkNorm) {
@@ -1520,6 +1570,95 @@ function drawLiveFrameOverlay(box) {
   ctx.restore();
 }
 
+function drawFramingLockIndicator(box, progress) {
+  const cx = box.x + box.width / 2;
+  const cy = box.y + box.height / 2;
+  const r = 36;
+
+  ctx.save();
+  // Background disk
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, 0, Math.PI * 2);
+  ctx.fillStyle = "rgba(10, 8, 24, 0.8)";
+  ctx.fill();
+  ctx.strokeStyle = "rgba(255, 255, 255, 0.25)";
+  ctx.lineWidth = 3;
+  ctx.stroke();
+
+  // Progress arc
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * progress, false);
+  ctx.strokeStyle = "#ff9933";
+  ctx.lineWidth = 6;
+  ctx.lineCap = "round";
+  ctx.shadowColor = "rgba(255, 153, 51, 0.95)";
+  ctx.shadowBlur = 18;
+  ctx.stroke();
+
+  // Center icon
+  ctx.font = "20px sans-serif";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText("🔒", cx, cy);
+
+  // Label below
+  ctx.font = "bold 11px 'Space Mono', monospace";
+  ctx.fillStyle = "#ff9933";
+  ctx.shadowColor = "rgba(255, 153, 51, 0.9)";
+  ctx.shadowBlur = 12;
+  ctx.fillText(`LOCKING ${Math.round(progress * 100)}%`, cx, cy + r + 18);
+
+  ctx.restore();
+}
+
+function drawFistProgressIndicator(handsLandmarks, progress, isSolved) {
+  if (progress <= 0) return;
+  const fistHand = handsLandmarks.find((lm) => isFist(lm));
+  let cx, cy;
+  if (fistHand) {
+    const wristPx = toPixel(mirrorLandmarkX(fistHand[LM.WRIST]));
+    cx = wristPx.x;
+    cy = wristPx.y - 45;
+  } else {
+    cx = canvas.width / 2;
+    cy = canvas.height / 2;
+  }
+
+  const r = 34;
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, 0, Math.PI * 2);
+  ctx.fillStyle = "rgba(5, 18, 12, 0.88)";
+  ctx.fill();
+  ctx.strokeStyle = "rgba(255, 255, 255, 0.2)";
+  ctx.lineWidth = 3;
+  ctx.stroke();
+
+  const color = isSolved ? "#34d399" : "#ff9933";
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * progress, false);
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 5;
+  ctx.lineCap = "round";
+  ctx.shadowColor = color;
+  ctx.shadowBlur = 16;
+  ctx.stroke();
+
+  ctx.font = "20px sans-serif";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText("✊", cx, cy);
+
+  ctx.font = "bold 11px 'Space Mono', monospace";
+  ctx.fillStyle = color;
+  ctx.shadowColor = color;
+  ctx.shadowBlur = 10;
+  const label = isSolved ? `SAVING ${Math.round(progress * 100)}%` : `RESETTING ${Math.round(progress * 100)}%`;
+  ctx.fillText(label, cx, cy + r + 16);
+
+  ctx.restore();
+}
+
 function isPointInBoard(px, py, box) {
   if (!box) return false;
   return (
@@ -1742,7 +1881,7 @@ function processResults(result) {
 
   const anyFist = handsLandmarks.some((lm) => isFist(lm));
   const draggingNow = drag.activeHand !== null && drag.piece !== null;
-  if (anyFist && !draggingNow && appState !== "tracking") {
+  if (anyFist && !draggingNow && appState === "puzzle") {
     fistHoldCounter++;
     if (fistHoldCounter >= FIST_HOLD_FRAMES) {
       fistHoldCounter = 0;
@@ -1760,6 +1899,17 @@ function processResults(result) {
     }
     if (handsLandmarks.length === 2) {
       const [handA, handB] = handsLandmarks;
+      const isHandAFist = isFist(handA);
+      const isHandBFist = isFist(handB);
+
+      // CRITICAL: A fist must NEVER frame or capture!
+      if (isHandAFist || isHandBFist) {
+        freezeGate.holding = false;
+        statusDot.className = "status-dot live";
+        statusText.textContent = "open hands to frame photo (fist detected)";
+        return;
+      }
+
       const indexA = mirrorLandmarkX(handA[LM.INDEX_TIP]);
       const indexB = mirrorLandmarkX(handB[LM.INDEX_TIP]);
       const frameBox = computeHandFrame(indexA, indexB);
@@ -1772,21 +1922,32 @@ function processResults(result) {
       }
 
       const bothPinching = isPinching(handA) && isPinching(handB);
-      if (bothPinching && frameBox.width > 40 && frameBox.height > 40) {
+      const validFrameSize = frameBox.width >= 100 && frameBox.height >= 100;
+
+      if (bothPinching && validFrameSize) {
         if (!freezeGate.holding) {
           freezeGate.holding = true;
           freezeGate.since = performance.now();
         }
+        const elapsed = performance.now() - freezeGate.since;
+        const progress = Math.min(1, elapsed / FREEZE_HOLD_MS);
         statusDot.className = "status-dot armed";
-        statusText.textContent = "hold the pinch…";
+        statusText.textContent = `holding frame… ${Math.round(progress * 100)}%`;
 
-        if (performance.now() - freezeGate.since > FREEZE_HOLD_MS) {
+        drawFramingLockIndicator(frameBox, progress);
+
+        if (elapsed >= FREEZE_HOLD_MS) {
           freezeGate.holding = false;
           startCountdown(frameBox);
         }
       } else {
         freezeGate.holding = false;
-        statusText.textContent = "hands tracking";
+        statusDot.className = "status-dot live";
+        if (isPinching(handA) || isPinching(handB)) {
+          statusText.textContent = "pinch both hands (index + thumb) to lock";
+        } else {
+          statusText.textContent = "form frame with hands • pinch to lock";
+        }
       }
     } else {
       freezeGate.holding = false;
@@ -1794,9 +1955,11 @@ function processResults(result) {
       if (lastSeenFrame.box && sinceLastSeen < FRAME_GRACE_MS) {
         applyActiveFilterToBox(lastSeenFrame.box);
         drawLiveFrameOverlay(lastSeenFrame.box);
-        statusText.textContent = "hands tracking";
+      }
+      if (handsLandmarks.length === 1 && isFist(handsLandmarks[0])) {
+        statusText.textContent = "open hand to frame (fist detected)";
       } else {
-        statusText.textContent = "hands tracking";
+        statusText.textContent = "show both hands to frame a shot";
       }
     }
     return;
@@ -1829,11 +1992,17 @@ function processResults(result) {
     drawBoardAndPieces();
     drawHandSkeletonsOverBoard(handsLandmarks, puzzle.boardBox);
 
+    if (fistHoldCounter > 0) {
+      drawFistProgressIndicator(handsLandmarks, fistHoldCounter / FIST_HOLD_FRAMES, puzzle.solved);
+    }
+
     statusText.textContent = puzzle.solved
       ? (fistHoldCounter > 0
-          ? `saving… hold fist (${fistHoldCounter}/${FIST_HOLD_FRAMES})`
-          : "puzzle complete! close your fist to save")
-      : "arrange the puzzle with pinch";
+          ? `saving… hold fist steady ✊ (${Math.round((fistHoldCounter / FIST_HOLD_FRAMES) * 100)}%)`
+          : "✨ puzzle complete! close your fist ✊ to save")
+      : (fistHoldCounter > 0
+          ? `resetting… hold fist (${Math.round((fistHoldCounter / FIST_HOLD_FRAMES) * 100)}%)`
+          : "arrange pieces with pinch • fist ✊ to reset");
   }
 }
 

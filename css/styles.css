@@ -530,7 +530,8 @@ canvas#sceneCanvas {
 }
 .gesture-key .swatch.pinch { border-radius: 50%; border-color: var(--signal); box-shadow: 0 0 6px var(--glow-purple); }
 .gesture-key .swatch.drag  { border-radius: 50%; border-color: var(--ok); border-style: dashed; box-shadow: 0 0 6px var(--glow-green); }
-.gesture-key .swatch.fist  { border-radius: 2px; border-color: var(--danger); background: var(--danger); box-shadow: 0 0 6px var(--glow-red); }
+.gesture-key .swatch.thumb,
+.gesture-key .swatch.fist  { border-radius: 2px; border-color: #ff9933; background: #ff9933; box-shadow: 0 0 8px rgba(255,153,51,0.6); }
 
 /* ─── GALLERY ────────────────────────────────────── */
 #gallery {

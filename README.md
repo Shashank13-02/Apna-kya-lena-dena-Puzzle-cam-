@@ -6,7 +6,7 @@
 
 ## **DESCRIPTION**
 
-**Apna Kya Lena Dena** lets you frame photos using your hands as a camera box (index fingers & thumbs), applies real-time aesthetic film filters (from authentic Photobooth B&W and 1970s Kodachrome to Retro Vaporwave & Thermal Heatmap), slices your shot into a 3×3 jigsaw puzzle, and lets you drag and solve the pieces using mid-air pinch gestures.
+**Apna Kya Lena Dena** lets you frame photos using your hands as a camera box (index fingers & thumbs), applies real-time aesthetic film filters (from authentic Photobooth B&W and 1970s Kodachrome to Aesthetic Duotone & Pixelated Arcade), slices your shot into a 3×3 jigsaw puzzle, and lets you drag and solve the pieces using mid-air pinch gestures.
 
 Once solved, completed snaps are collected into a downloadable vertical **Photo Booth** strip!
 
@@ -85,9 +85,9 @@ Switch aesthetic photo filters anytime during framing, live solving, or viewing:
 - <kbd>4</kbd> — 📺 **VHS GLITCH** (RGB aberration & scanline noise)
 - <kbd>5</kbd> — 🌅 **GOLDEN HOUR** (Warm sunset amber glow)
 - <kbd>6</kbd> — 🟩 **MATRIX** (Cyberpunk terminal green)
-- <kbd>7</kbd> — 🌡️ **THERMAL** (Ironbow infrared heatmap)
+- <kbd>7</kbd> — 🎭 **DUOTONE** (Aesthetic violet & sunset coral)
 - <kbd>8</kbd> — 🎞️ **1970s FILM** (Sun-drenched Kodachrome with turquoise blues)
-- <kbd>9</kbd> — 🌸 **ANIME POP** (High-saturation cel vibrancy)
+- <kbd>9</kbd> — 👾 **PIXELATED** (Slight 8-bit retro arcade)
 - <kbd>0</kbd> — 🌿 **NATURAL RAW** (Clean uncompressed feed)
 - <kbd>F</kbd> / <kbd>→</kbd> / <kbd>←</kbd> — Cycle filters forward / backward
 - <kbd>C</kbd> — Toggle filter target: **FRAME ONLY** vs **FULL WEBCAM**

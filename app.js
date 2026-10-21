@@ -558,16 +558,14 @@ function gaussianNoise(std) {
 
 // ─── AESTHETIC FILTER PALETTES & ALGORITHMS ───────────────
 
-const THERMAL_LUT = new Uint8ClampedArray(256 * 3);
-(function initThermalLUT() {
+const DUOTONE_LUT = new Uint8ClampedArray(256 * 3);
+(function initDuotoneLUT() {
+  // Highly aesthetic editorial duotone: Deep Velvet Midnight Indigo -> Mulberry -> Sunset Coral -> Sunlit Champagne
   const stops = [
-    { p: 0.00, r: 8,   g: 0,   b: 36  },
-    { p: 0.18, r: 0,   g: 25,  b: 170 },
-    { p: 0.38, r: 0,   g: 195, b: 215 },
-    { p: 0.60, r: 35,  g: 215, b: 45  },
-    { p: 0.78, r: 235, g: 145, b: 0   },
-    { p: 0.92, r: 245, g: 30,  b: 20  },
-    { p: 1.00, r: 255, g: 255, b: 245 },
+    { p: 0.00, r: 18,  g: 10,  b: 48  },
+    { p: 0.35, r: 108, g: 26,  b: 98  },
+    { p: 0.70, r: 245, g: 116, b: 104 },
+    { p: 1.00, r: 255, g: 232, b: 202 },
   ];
   for (let i = 0; i < 256; i++) {
     const t = i / 255;
@@ -582,9 +580,9 @@ const THERMAL_LUT = new Uint8ClampedArray(256 * 3);
     const span = s1.p - s0.p || 1;
     const f = (t - s0.p) / span;
     const off = i * 3;
-    THERMAL_LUT[off]     = Math.round(s0.r + (s1.r - s0.r) * f);
-    THERMAL_LUT[off + 1] = Math.round(s0.g + (s1.g - s0.g) * f);
-    THERMAL_LUT[off + 2] = Math.round(s0.b + (s1.b - s0.b) * f);
+    DUOTONE_LUT[off]     = Math.round(s0.r + (s1.r - s0.r) * f);
+    DUOTONE_LUT[off + 1] = Math.round(s0.g + (s1.g - s0.g) * f);
+    DUOTONE_LUT[off + 2] = Math.round(s0.b + (s1.b - s0.b) * f);
   }
 })();
 
@@ -665,14 +663,14 @@ function applyMatrixFilter(imageData) {
   return imageData;
 }
 
-function applyThermalFilter(imageData) {
+function applyDuotoneFilter(imageData) {
   const d = imageData.data;
   for (let i = 0; i < d.length; i += 4) {
     const lum = (77 * d[i] + 150 * d[i + 1] + 29 * d[i + 2]) >> 8;
     const off = lum * 3;
-    d[i]     = THERMAL_LUT[off];
-    d[i + 1] = THERMAL_LUT[off + 1];
-    d[i + 2] = THERMAL_LUT[off + 2];
+    d[i]     = DUOTONE_LUT[off];
+    d[i + 1] = DUOTONE_LUT[off + 1];
+    d[i + 2] = DUOTONE_LUT[off + 2];
   }
   return imageData;
 }
@@ -732,18 +730,45 @@ function applyVintageFilter(imageData) {
   return imageData;
 }
 
-function applyAnimeFilter(imageData) {
+function applyPixelatedFilter(imageData) {
   const d = imageData.data;
-  const steps = 4;
-  const stepSize = 256 / steps;
-  for (let i = 0; i < d.length; i += 4) {
-    const r = d[i], g = d[i + 1], b = d[i + 2];
-    const lum = (77 * r + 150 * g + 29 * b) >> 8;
-    const quant = Math.floor(lum / stepSize) * (255 / (steps - 1));
-    const factor = quant / Math.max(1, lum);
-    d[i]     = Math.min(255, Math.max(0, r * factor * 1.16));
-    d[i + 1] = Math.min(255, Math.max(0, g * factor * 1.10));
-    d[i + 2] = Math.min(255, Math.max(0, b * factor * 1.16));
+  const w = imageData.width;
+  const h = imageData.height;
+  // Slight pixelation: dynamic block size keeps ~75-85 crisp pixel blocks across any frame dimension
+  const size = Math.max(4, Math.round(Math.min(w, h) / 80));
+
+  for (let y = 0; y < h; y += size) {
+    const blockH = Math.min(size, h - y);
+    for (let x = 0; x < w; x += size) {
+      const blockW = Math.min(size, w - x);
+      let rSum = 0, gSum = 0, bSum = 0;
+      const total = blockW * blockH;
+
+      for (let by = 0; by < blockH; by++) {
+        const rowOffset = (y + by) * w;
+        for (let bx = 0; bx < blockW; bx++) {
+          const idx = (rowOffset + x + bx) * 4;
+          rSum += d[idx];
+          gSum += d[idx + 1];
+          bSum += d[idx + 2];
+        }
+      }
+
+      // Subtle contrast and saturation pop for crisp retro pixel art definition
+      const rAvg = Math.min(255, Math.max(0, Math.round(((rSum / total) - 128) * 1.06 + 128)));
+      const gAvg = Math.min(255, Math.max(0, Math.round(((gSum / total) - 128) * 1.06 + 128)));
+      const bAvg = Math.min(255, Math.max(0, Math.round(((bSum / total) - 128) * 1.06 + 128)));
+
+      for (let by = 0; by < blockH; by++) {
+        const rowOffset = (y + by) * w;
+        for (let bx = 0; bx < blockW; bx++) {
+          const idx = (rowOffset + x + bx) * 4;
+          d[idx]     = rAvg;
+          d[idx + 1] = gAvg;
+          d[idx + 2] = bAvg;
+        }
+      }
+    }
   }
   return imageData;
 }
@@ -820,14 +845,14 @@ const FILTERS = [
     apply: applyMatrixFilter,
   },
   {
-    id: "thermal",
+    id: "duotone",
     key: "7",
-    name: "THERMAL",
-    subtitle: "Heatmap Vision",
-    icon: "🔥",
-    color: "#ef4444",
-    glow: "rgba(239, 68, 68, 0.6)",
-    apply: applyThermalFilter,
+    name: "DUOTONE",
+    subtitle: "Violet & Peach",
+    icon: "🎭",
+    color: "#e879f9",
+    glow: "rgba(232, 121, 249, 0.6)",
+    apply: applyDuotoneFilter,
   },
   {
     id: "vintage",
@@ -840,14 +865,14 @@ const FILTERS = [
     apply: applyVintageFilter,
   },
   {
-    id: "anime",
+    id: "pixelated",
     key: "9",
-    name: "ANIME POP",
-    subtitle: "Cel-Shaded",
-    icon: "🎨",
-    color: "#a855f7",
-    glow: "rgba(168, 85, 247, 0.6)",
-    apply: applyAnimeFilter,
+    name: "PIXELATED",
+    subtitle: "8-Bit Retro",
+    icon: "👾",
+    color: "#06b6d4",
+    glow: "rgba(6, 182, 212, 0.6)",
+    apply: applyPixelatedFilter,
   },
   {
     id: "raw",
